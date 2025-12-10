@@ -47,10 +47,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/*.parquet data/*.log results_all/* results_selected/* || true
+          # Stage files only if they exist (prevents errors)
+          if [ -n "$(ls data/*.parquet 2>/dev/null)" ]; then git add data/*.parquet; fi
+          if [ -n "$(ls data/*.log 2>/dev/null)" ]; then git add data/*.log; fi
+          if [ -n "$(ls results_all/* 2>/dev/null)" ]; then git add results_all/*; fi
+          if [ -n "$(ls results_selected/* 2>/dev/null)" ]; then git add results_selected/*; fi
 
+          # Commit only if staged changes exist
           if ! git diff --staged --quiet; then
             git commit -m "Auto update from scheduled workflow [skip ci]"
             git push
           else
-            echo "No changes to commit."
+            echo "No output changes to commit."
+          fi
