@@ -2,7 +2,7 @@ name: Run OHLC + OU Scans (Mon–Fri 06:00 IST)
 
 on:
   schedule:
-    - cron: "30 0 * * 1-5"
+    - cron: "30 0 * * 1-5"   # 06:00 IST -> 00:30 UTC
   workflow_dispatch:
 
 jobs:
@@ -25,11 +25,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Ensure directories exist
+      - name: Ensure directories exist (both locations)
         run: |
-          mkdir -p scripts/data
-          mkdir -p scripts/results_all
-          mkdir -p scripts/results_selected
+          # ensure both possible target folders exist (scripts/ and root)
+          mkdir -p scripts/data scripts/results_all scripts/results_selected
+          mkdir -p data results_all results_selected
+          mkdir -p outputs
 
       - name: Run ohlc.py
         run: python scripts/ohlc.py
@@ -40,22 +41,37 @@ jobs:
       - name: Run oucheck1.py
         run: python scripts/oucheck1.py
 
-      - name: Commit updated output files
+      - name: Write run marker (guarantees at least one change)
+        run: |
+          echo "Last run: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" > outputs/last_run.txt
+          echo "Runner: $RUNNER_OS" >> outputs/last_run.txt
+          cat outputs/last_run.txt
+
+      - name: Commit updated output files (robust)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Stage data outputs
+          # Stage possible parquet/log locations (root and scripts)
+          if ls data/*.parquet 1> /dev/null 2>&1; then git add data/*.parquet; fi
           if ls scripts/data/*.parquet 1> /dev/null 2>&1; then git add scripts/data/*.parquet; fi
+
+          if ls data/*.log 1> /dev/null 2>&1; then git add data/*.log; fi
           if ls scripts/data/*.log 1> /dev/null 2>&1; then git add scripts/data/*.log; fi
 
-          # Stage OU outputs (the folders storing csvs)
+          # Stage OU results in either location
+          if ls results_all/* 1> /dev/null 2>&1; then git add results_all/*; fi
           if ls scripts/results_all/* 1> /dev/null 2>&1; then git add scripts/results_all/*; fi
+
+          if ls results_selected/* 1> /dev/null 2>&1; then git add results_selected/*; fi
           if ls scripts/results_selected/* 1> /dev/null 2>&1; then git add scripts/results_selected/*; fi
 
-          # Commit only if changes exist
+          # Always add the run marker so we see a commit every run
+          git add outputs/last_run.txt || true
+
+          # Commit only if staged changes exist (it will when marker changed)
           if ! git diff --staged --quiet; then
-            git commit -m "Auto update from workflow [skip ci]"
+            git commit -m "Auto update from scheduled workflow [skip ci]"
             git push
           else
             echo "No changes to commit."
