@@ -3,67 +3,55 @@ import numpy as np
 import os
 from datetime import datetime
 
-# -----------------------
-# Github Paths
-# -----------------------
-base_folder = "scripts"
-input_parquet_name = "data/daily_ohlc.parquet"
-results_folder = "results_selected"
+# Fixed parquet path (correct location)
+input_path = "../data/daily_ohlc.parquet"
 
+results_folder = "results_selected"
+output_base = "scripts"
+
+# OU params
 reg_window = 60
 ma_length = 200
 min_theta = 0.02
 max_half_life = 25
 
-# -----------------------
-# SYMBOL LIST (exactly from your 2.py)
-# -----------------------
-
-SYMBOLS_TO_SCAN = [
-    '360ONE', 'ABB', 'APLAPOLLO', 'AUBANK', 'ADANIENSOL', 'ADANIENT', 'ADANIGREEN', 'ADANIPORTS', 
-    'ABCAPITAL', 'ALKEM', 'AMBER', 'AMBUJACEM', 'ANGELONE', 'APOLLOHOSP', 'ASHOKLEY', 'ASIANPAINT', 
-    'ASTRAL', 'AUROPHARMA', 'DMART', 'AXISBANK', 'BSE', 'BAJAJ-AUTO', 'BAJFINANCE', 'BAJAJFINSV', 
-    'BANKBARODA', 'BANKINDIA', 'BDL', 'BEL', 'BHARATFORG', 'BHEL', 'BPCL', 'BHARTIARTL', 
-    'BIOCON', 'BLUESTARCO', 'BOSCHLTD', 'BRITANNIA', 'CGPOWER', 'CANBK', 'CDSL', 'CHOLAFIN', 
-    'CIPLA', 'COALINDIA', 'COFORGE', 'COLPAL', 'CAMS', 'CONCOR', 'CROMPTON', 'CUMMINSIND', 
-    'CYIENT', 'DLF', 'DABUR', 'DALBHARAT', 'DELHIVERY', 'DIVISLAB', 'DIXON', 'DRREDDY', 
-    'ETERNAL', 'EICHERMOT', 'EXIDEIND', 'NYKAA', 'FORTIS', 'GAIL', 'GMRAIRPORT', 'GLENMARK', 
-    'GODREJCP', 'GODREJPROP', 'GRASIM', 'HCLTECH', 'HDFCAMC', 'HDFCBANK', 'HDFCLIFE', 'HFCL', 
-    'HAVELLS', 'HEROMOTOCO', 'HINDALCO', 'HAL', 'HINDPETRO', 'HINDUNILVR', 'HINDZINC', 'HUDCO', 
-    'ICICIBANK', 'ICICIGI', 'ICICIPRULI', 'IDFCFIRSTB', 'IIFL', 'ITC', 'INDIANB', 'IEX', 
-    'IOC', 'IRCTC', 'IRFC', 'IREDA', 'IGL', 'INDUSTOWER', 'INDUSINDBK', 'NAUKRI', 'INFY', 
-    'INOXWIND', 'INDIGO', 'JSWENERGY', 'JSWSTEEL', 'JINDALSTEL', 'JIOFIN', 'JUBLFOOD', 'KEI', 
-    'KPITTECH', 'KALYANKJIL', 'KAYNES', 'KFINTECH', 'KOTAKBANK', 'LTF', 'LICHSGFIN', 'LTIM', 
-    'LT', 'LAURUSLABS', 'LICI', 'LODHA', 'LUPIN', 'M&M', 'MANAPPURAM', 'MANKIND', 'MARICO', 
-    'MARUTI', 'MFSL', 'MAXHEALTH', 'MAZDOCK', 'MPHASIS', 'MCX', 'MUTHOOTFIN', 'NBCC', 'NCC', 
-    'NHPC', 'NMDC', 'NTPC', 'NATIONALUM', 'NESTLEIND', 'NUVAMA', 'OBEROIRLTY', 'ONGC', 'OIL', 
-    'PAYTM', 'OFSS', 'POLICYBZR', 'PGEL', 'PIIND', 'PNBHOUSING', 'PAGEIND', 'PATANJALI', 
-    'PERSISTENT', 'PETRONET', 'PIDILITIND', 'PPLPHARMA', 'POLYCAB', 'PFC', 'POWERGRID', 
-    'PRESTIGE', 'PNB', 'RBLBANK', 'RECLTD', 'RVNL', 'RELIANCE', 'SBICARD', 'SBILIFE', 
-    'SHREECEM', 'SRF', 'SAMMAANCAP', 'MOTHERSON', 'SHRIRAMFIN', 'SIEMENS', 'SOLARINDS', 
-    'SONACOMS', 'SBIN', 'SAIL', 'SUNPHARMA', 'SUPREMEIND', 'SUZLON', 'SYNGENE', 'TATACONSUM', 
-    'TITAGARH', 'TVSMOTOR', 'TATACHEM', 'TCS', 'TATAELXSI', 'TATAMOTORS', 'TATAPOWER', 
-    'TATASTEEL', 'TATATECH', 'TECHM', 'FEDERALBNK', 'INDHOTEL', 'PHOENIXLTD', 'TITAN', 
-    'TORNTPHARM', 'TORNTPOWER', 'TRENT', 'TIINDIA', 'UNOMINDA', 'UPL', 'ULTRACEMCO', 
-    'UNIONBANK', 'UNITDSPR', 'VBL', 'VEDL', 'IDEA', 'VOLTAS', 'WIPRO', 'YESBANK', 'ZYDUSLIFE', 'BANDHANBNK'
-]
-
-# -----------------------
-# Setup IO paths
-# -----------------------
-
-input_path = os.path.join(base_folder, input_parquet_name)
-results_path = os.path.join(base_folder, results_folder)
-os.makedirs(results_path, exist_ok=True)
+os.makedirs(os.path.join(output_base, results_folder), exist_ok=True)
 
 current_date = datetime.now().strftime("%Y-%m-%d")
 output_filename = f"ou_signals_{current_date}.csv"
-output_path = os.path.join(results_path, output_filename)
+output_path = os.path.join(output_base, results_folder, output_filename)
 
-# -------------------------------------------------------------------------
-# OU CALCULATION (unchanged)
-# -------------------------------------------------------------------------
+# SYMBOL LIST (from your 2.py)
+SYMBOLS_TO_SCAN = [
+    '360ONE', 'ABB', 'APLAPOLLO', 'AUBANK', 'ADANIENSOL', 'ADANIENT', 'ADANIGREEN', 'ADANIPORTS',
+    'ABCAPITAL', 'ALKEM', 'AMBER', 'AMBUJACEM', 'ANGELONE', 'APOLLOHOSP', 'ASHOKLEY', 'ASIANPAINT',
+    'ASTRAL', 'AUROPHARMA', 'DMART', 'AXISBANK', 'BSE', 'BAJAJ-AUTO', 'BAJFINANCE', 'BAJAJFINSV',
+    'BANKBARODA', 'BANKINDIA', 'BDL', 'BEL', 'BHARATFORG', 'BHEL', 'BPCL', 'BHARTIARTL',
+    'BIOCON', 'BLUESTARCO', 'BOSCHLTD', 'BRITANNIA', 'CGPOWER', 'CANBK', 'CDSL', 'CHOLAFIN',
+    'CIPLA', 'COALINDIA', 'COFORGE', 'COLPAL', 'CAMS', 'CONCOR', 'CROMPTON', 'CUMMINSIND',
+    'CYIENT', 'DLF', 'DABUR', 'DALBHARAT', 'DELHIVERY', 'DIVISLAB', 'DIXON', 'DRREDDY',
+    'ETERNAL', 'EICHERMOT', 'EXIDEIND', 'NYKAA', 'FORTIS', 'GAIL', 'GMRAIRPORT', 'GLENMARK',
+    'GODREJCP', 'GODREJPROP', 'GRASIM', 'HCLTECH', 'HDFCAMC', 'HDFCBANK', 'HDFCLIFE', 'HFCL',
+    'HAVELLS', 'HEROMOTOCO', 'HINDALCO', 'HAL', 'HINDPETRO', 'HINDUNILVR', 'HINDZINC', 'HUDCO',
+    'ICICIBANK', 'ICICIGI', 'ICICIPRULI', 'IDFCFIRSTB', 'IIFL', 'ITC', 'INDIANB', 'IEX',
+    'IOC', 'IRCTC', 'IRFC', 'IREDA', 'IGL', 'INDUSTOWER', 'INDUSINDBK', 'NAUKRI', 'INFY',
+    'INOXWIND', 'INDIGO', 'JSWENERGY', 'JSWSTEEL', 'JINDALSTEL', 'JIOFIN', 'JUBLFOOD', 'KEI',
+    'KPITTECH', 'KALYANKJIL', 'KAYNES', 'KFINTECH', 'KOTAKBANK', 'LTF', 'LICHSGFIN', 'LTIM',
+    'LT', 'LAURUSLABS', 'LICI', 'LODHA', 'LUPIN', 'M&M', 'MANAPPURAM', 'MANKIND', 'MARICO',
+    'MARUTI', 'MFSL', 'MAXHEALTH', 'MAZDOCK', 'MPHASIS', 'MCX', 'MUTHOOTFIN', 'NBCC', 'NCC',
+    'NHPC', 'NMDC', 'NTPC', 'NATIONALUM', 'NESTLEIND', 'NUVAMA', 'OBEROIRLTY', 'ONGC', 'OIL',
+    'PAYTM', 'OFSS', 'POLICYBZR', 'PGEL', 'PIIND', 'PNBHOUSING', 'PAGEIND', 'PATANJALI',
+    'PERSISTENT', 'PETRONET', 'PIDILITIND', 'PPLPHARMA', 'POLYCAB', 'PFC', 'POWERGRID',
+    'PRESTIGE', 'PNB', 'RBLBANK', 'RECLTD', 'RVNL', 'RELIANCE', 'SBICARD', 'SBILIFE',
+    'SHREECEM', 'SRF', 'SAMMAANCAP', 'MOTHERSON', 'SHRIRAMFIN', 'SIEMENS', 'SOLARINDS',
+    'SONACOMS', 'SBIN', 'SAIL', 'SUNPHARMA', 'SUPREMEIND', 'SUZLON', 'SYNGENE', 'TATACONSUM',
+    'TITAGARH', 'TVSMOTOR', 'TATACHEM', 'TCS', 'TATAELXSI', 'TATAMOTORS', 'TATAPOWER',
+    'TATASTEEL', 'TATATECH', 'TECHM', 'FEDERALBNK', 'INDHOTEL', 'PHOENIXLTD', 'TITAN',
+    'TORNTPHARM', 'TORNTPOWER', 'TRENT', 'TIINDIA', 'UNOMINDA', 'UPL', 'ULTRACEMCO',
+    'UNIONBANK', 'UNITDSPR', 'VBL', 'VEDL', 'IDEA', 'VOLTAS', 'WIPRO', 'YESBANK', 'ZYDUSLIFE', 'BANDHANBNK'
+]
 
+# OU calculation function
 def calculate_ou_parameters_at_bar(prices, reg_window, ma_length, bar_idx):
 
     if bar_idx < ma_length + reg_window:
@@ -78,6 +66,7 @@ def calculate_ou_parameters_at_bar(prices, reg_window, ma_length, bar_idx):
 
     last = len(prices_subset) - 1
     start = last - reg_window + 1
+
     if start < ma_length + 1:
         return None
 
@@ -97,7 +86,7 @@ def calculate_ou_parameters_at_bar(prices, reg_window, ma_length, bar_idx):
     sxy = (X_vals * dX_vals).sum()
     sx2 = (X_vals ** 2).sum()
 
-    denom = n * sx2 - sx ** 2
+    denom = n * sx2 - sx*sx
     if denom == 0:
         return None
 
@@ -115,30 +104,23 @@ def calculate_ou_parameters_at_bar(prices, reg_window, ma_length, bar_idx):
 
     pred = a + b * X_vals
     resid = dX_vals - pred
-    sigma = np.sqrt((resid ** 2).sum() / (len(X_vals) - 2))
+    sigma = np.sqrt((resid**2).sum() / (len(X_vals) - 2))
 
-    eq_var = sigma ** 2 / (2 * theta)
+    eq_var = sigma**2 / (2 * theta)
     eq_sd = np.sqrt(eq_var)
 
     upper = mu + 2 * eq_sd
     lower = mu - 2 * eq_sd
     half_life = np.log(2) / theta
 
-    return {
-        "theta": theta,
-        "half_life": half_life,
-        "Xt": Xt.iloc[-1],
-        "upper": upper,
-        "lower": lower
-    }
+    return {"theta": theta, "half_life": half_life, "Xt": Xt.iloc[-1], "upper": upper, "lower": lower}
 
-# -------------------------------------------------------------------------
-# SIGNAL DETECTION (unchanged)
-# -------------------------------------------------------------------------
 
+# Signal detection
 def detect_signals(df_symbol):
 
     df_symbol = df_symbol.sort_values("Date").reset_index(drop=True)
+
     if len(df_symbol) < ma_length + reg_window + 1:
         return []
 
@@ -153,7 +135,7 @@ def detect_signals(df_symbol):
 
     theta = curr_params["theta"]
     hl = curr_params["half_life"]
-    regime = (theta >= min_theta and hl <= max_half_life)
+    regime_ok = (theta >= min_theta and hl <= max_half_life)
 
     Xp = prev_params["Xt"]
     Xc = curr_params["Xt"]
@@ -161,68 +143,4 @@ def detect_signals(df_symbol):
     lp = prev_params["lower"]
     up = prev_params["upper"]
 
-    lc = curr_params["lower"]
-    uc = curr_params["upper"]
-
-    raw_buy = (Xp >= lp) and (Xc < lc) and (Xc < Xp)
-    raw_sell = (Xp <= up) and (Xc > uc) and (Xc > Xp)
-
-    date = df_symbol["Date"].iloc[last]
-    close = df_symbol["Close"].iloc[last]
-
-    if raw_buy or raw_sell:
-        sig = "BUY" if raw_buy else "SELL"
-        return [{
-            "Symbol": df_symbol["Symbol"].iloc[0],
-            "Date": date,
-            "Close": close,
-            "Signal": sig,
-            "Theta": theta,
-            "Half_Life": hl,
-            "Deviation_Xt": Xc,
-            "Prev_Xt": Xp,
-            "Upper_Band": uc,
-            "Lower_Band": lc,
-            "Regime_Valid": regime
-        }]
-
-    return []
-
-# -------------------------------------------------------------------------
-# MAIN
-# -------------------------------------------------------------------------
-
-print("OU Scanner for Selected Symbols")
-print("Loading:", input_path)
-
-df = pd.read_parquet(input_path)
-df["Date"] = pd.to_datetime(df["Date"])
-
-available = set(df["Symbol"].unique())
-
-###
-# Build (symbol, symbol.NS)
-###
-matchlist = set()
-for s in SYMBOLS_TO_SCAN:
-    matchlist.add(s)
-    matchlist.add(s + ".NS")
-
-symbols = sorted(list(available & matchlist))
-
-results = []
-
-for sym in symbols:
-    sub = df[df["Symbol"] == sym].copy()
-    sigs = detect_signals(sub)
-    results.extend(sigs)
-
-if results:
-    outdf = pd.DataFrame(results)
-    outdf = outdf.sort_values("Date", ascending=False)
-    outdf.to_csv(output_path, index=False)
-    print("Saved:", output_path)
-else:
-    print("No signals found.")
-
-print("Done.")
+    lc = curr_params_
