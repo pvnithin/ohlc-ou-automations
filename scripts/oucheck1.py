@@ -3,80 +3,86 @@ import numpy as np
 import os
 from datetime import datetime
 
-# --- Configuration ---
-base_folder = os.path.join(os.getcwd(), "data")
-input_parquet_name = "daily_ohlc.parquet"
+# -----------------------
+# Github Paths
+# -----------------------
+base_folder = "scripts"
+input_parquet_name = "data/daily_ohlc.parquet"
 results_folder = "results_selected"
 
-reg_window = 60      # OU regression window
-ma_length = 200      # Long-term mean window
-min_theta = 0.02     # Minimum mean reversion speed
-max_half_life = 25   # Max acceptable half-life
+reg_window = 60
+ma_length = 200
+min_theta = 0.02
+max_half_life = 25
 
-# ------------------ SYMBOL LIST (UNCHANGED) ------------------
+# -----------------------
+# SYMBOL LIST (exactly from your 2.py)
+# -----------------------
+
 SYMBOLS_TO_SCAN = [
-    '360ONE', 'ABB', 'APLAPOLLO', 'AUBANK', 'ADANIENSOL', 'ADANIENT', 'ADANIGREEN',
-    'ADANIPORTS', 'ABCAPITAL', 'ALKEM', 'AMBER', 'AMBUJACEM', 'ANGELONE', 'APOLLOHOSP',
-    'ASHOKLEY', 'ASIANPAINT', 'ASTRAL', 'AUROPHARMA', 'DMART', 'AXISBANK', 'BSE',
-    'BAJAJ-AUTO', 'BAJFINANCE', 'BAJAJFINSV', 'BANKBARODA', 'BANKINDIA', 'BDL', 'BEL',
-    'BHARATFORG', 'BHEL', 'BPCL', 'BHARTIARTL', 'BIOCON', 'BLUESTARCO', 'BOSCHLTD',
-    'BRITANNIA', 'CGPOWER', 'CANBK', 'CDSL', 'CHOLAFIN', 'CIPLA', 'COALINDIA',
-    'COFORGE', 'COLPAL', 'CAMS', 'CONCOR', 'CROMPTON', 'CUMMINSIND', 'CYIENT', 'DLF',
-    'DABUR', 'DALBHARAT', 'DELHIVERY', 'DIVISLAB', 'DIXON', 'DRREDDY', 'ETERNAL',
-    'EICHERMOT', 'EXIDEIND', 'NYKAA', 'FORTIS', 'GAIL', 'GMRAIRPORT', 'GLENMARK',
-    'GODREJCP', 'GODREJPROP', 'GRASIM', 'HCLTECH', 'HDFCAMC', 'HDFCBANK', 'HDFCLIFE',
-    'HFCL', 'HAVELLS', 'HEROMOTOCO', 'HINDALCO', 'HAL', 'HINDPETRO', 'HINDUNILVR',
-    'HINDZINC', 'HUDCO', 'ICICIBANK', 'ICICIGI', 'ICICIPRULI', 'IDFCFIRSTB', 'IIFL',
-    'ITC', 'INDIANB', 'IEX', 'IOC', 'IRCTC', 'IRFC', 'IREDA', 'IGL', 'INDUSTOWER',
-    'INDUSINDBK', 'NAUKRI', 'INFY', 'INOXWIND', 'INDIGO', 'JSWENERGY', 'JSWSTEEL',
-    'JINDALSTEL', 'JIOFIN', 'JUBLFOOD', 'KEI', 'KPITTECH', 'KALYANKJIL', 'KAYNES',
-    'KFINTECH', 'KOTAKBANK', 'LTF', 'LICHSGFIN', 'LTIM', 'LT', 'LAURUSLABS', 'LICI',
-    'LODHA', 'LUPIN', 'M&M', 'MANAPPURAM', 'MANKIND', 'MARICO', 'MARUTI', 'MFSL',
-    'MAXHEALTH', 'MAZDOCK', 'MPHASIS', 'MCX', 'MUTHOOTFIN', 'NBCC', 'NCC', 'NHPC',
-    'NMDC', 'NTPC', 'NATIONALUM', 'NESTLEIND', 'NUVAMA', 'OBEROIRLTY', 'ONGC', 'OIL',
-    'PAYTM', 'OFSS', 'POLICYBZR', 'PGEL', 'PIIND', 'PNBHOUSING', 'PAGEIND', 'PATANJALI',
-    'PERSISTENT', 'PETRONET', 'PIDILITIND', 'PPLPHARMA', 'POLYCAB', 'PFC', 'POWERGRID',
-    'PRESTIGE', 'PNB', 'RBLBANK', 'RECLTD', 'RVNL', 'RELIANCE', 'SBICARD', 'SBILIFE',
-    'SHREECEM', 'SRF', 'SAMMAANCAP', 'MOTHERSON', 'SHRIRAMFIN', 'SIEMENS', 'SOLARINDS',
-    'SONACOMS', 'SBIN', 'SAIL', 'SUNPHARMA', 'SUPREMEIND', 'SUZLON', 'SYNGENE',
-    'TATACONSUM', 'TITAGARH', 'TVSMOTOR', 'TATACHEM', 'TCS', 'TATAELXSI', 'TATAMOTORS',
-    'TATAPOWER', 'TATASTEEL', 'TATATECH', 'TECHM', 'FEDERALBNK', 'INDHOTEL',
-    'PHOENIXLTD', 'TITAN', 'TORNTPHARM', 'TORNTPOWER', 'TRENT', 'TIINDIA', 'UNOMINDA',
-    'UPL', 'ULTRACEMCO', 'UNIONBANK', 'UNITDSPR', 'VBL', 'VEDL', 'IDEA', 'VOLTAS',
-    'WIPRO', 'YESBANK', 'ZYDUSLIFE', 'BANDHANBNK'
+    '360ONE', 'ABB', 'APLAPOLLO', 'AUBANK', 'ADANIENSOL', 'ADANIENT', 'ADANIGREEN', 'ADANIPORTS', 
+    'ABCAPITAL', 'ALKEM', 'AMBER', 'AMBUJACEM', 'ANGELONE', 'APOLLOHOSP', 'ASHOKLEY', 'ASIANPAINT', 
+    'ASTRAL', 'AUROPHARMA', 'DMART', 'AXISBANK', 'BSE', 'BAJAJ-AUTO', 'BAJFINANCE', 'BAJAJFINSV', 
+    'BANKBARODA', 'BANKINDIA', 'BDL', 'BEL', 'BHARATFORG', 'BHEL', 'BPCL', 'BHARTIARTL', 
+    'BIOCON', 'BLUESTARCO', 'BOSCHLTD', 'BRITANNIA', 'CGPOWER', 'CANBK', 'CDSL', 'CHOLAFIN', 
+    'CIPLA', 'COALINDIA', 'COFORGE', 'COLPAL', 'CAMS', 'CONCOR', 'CROMPTON', 'CUMMINSIND', 
+    'CYIENT', 'DLF', 'DABUR', 'DALBHARAT', 'DELHIVERY', 'DIVISLAB', 'DIXON', 'DRREDDY', 
+    'ETERNAL', 'EICHERMOT', 'EXIDEIND', 'NYKAA', 'FORTIS', 'GAIL', 'GMRAIRPORT', 'GLENMARK', 
+    'GODREJCP', 'GODREJPROP', 'GRASIM', 'HCLTECH', 'HDFCAMC', 'HDFCBANK', 'HDFCLIFE', 'HFCL', 
+    'HAVELLS', 'HEROMOTOCO', 'HINDALCO', 'HAL', 'HINDPETRO', 'HINDUNILVR', 'HINDZINC', 'HUDCO', 
+    'ICICIBANK', 'ICICIGI', 'ICICIPRULI', 'IDFCFIRSTB', 'IIFL', 'ITC', 'INDIANB', 'IEX', 
+    'IOC', 'IRCTC', 'IRFC', 'IREDA', 'IGL', 'INDUSTOWER', 'INDUSINDBK', 'NAUKRI', 'INFY', 
+    'INOXWIND', 'INDIGO', 'JSWENERGY', 'JSWSTEEL', 'JINDALSTEL', 'JIOFIN', 'JUBLFOOD', 'KEI', 
+    'KPITTECH', 'KALYANKJIL', 'KAYNES', 'KFINTECH', 'KOTAKBANK', 'LTF', 'LICHSGFIN', 'LTIM', 
+    'LT', 'LAURUSLABS', 'LICI', 'LODHA', 'LUPIN', 'M&M', 'MANAPPURAM', 'MANKIND', 'MARICO', 
+    'MARUTI', 'MFSL', 'MAXHEALTH', 'MAZDOCK', 'MPHASIS', 'MCX', 'MUTHOOTFIN', 'NBCC', 'NCC', 
+    'NHPC', 'NMDC', 'NTPC', 'NATIONALUM', 'NESTLEIND', 'NUVAMA', 'OBEROIRLTY', 'ONGC', 'OIL', 
+    'PAYTM', 'OFSS', 'POLICYBZR', 'PGEL', 'PIIND', 'PNBHOUSING', 'PAGEIND', 'PATANJALI', 
+    'PERSISTENT', 'PETRONET', 'PIDILITIND', 'PPLPHARMA', 'POLYCAB', 'PFC', 'POWERGRID', 
+    'PRESTIGE', 'PNB', 'RBLBANK', 'RECLTD', 'RVNL', 'RELIANCE', 'SBICARD', 'SBILIFE', 
+    'SHREECEM', 'SRF', 'SAMMAANCAP', 'MOTHERSON', 'SHRIRAMFIN', 'SIEMENS', 'SOLARINDS', 
+    'SONACOMS', 'SBIN', 'SAIL', 'SUNPHARMA', 'SUPREMEIND', 'SUZLON', 'SYNGENE', 'TATACONSUM', 
+    'TITAGARH', 'TVSMOTOR', 'TATACHEM', 'TCS', 'TATAELXSI', 'TATAMOTORS', 'TATAPOWER', 
+    'TATASTEEL', 'TATATECH', 'TECHM', 'FEDERALBNK', 'INDHOTEL', 'PHOENIXLTD', 'TITAN', 
+    'TORNTPHARM', 'TORNTPOWER', 'TRENT', 'TIINDIA', 'UNOMINDA', 'UPL', 'ULTRACEMCO', 
+    'UNIONBANK', 'UNITDSPR', 'VBL', 'VEDL', 'IDEA', 'VOLTAS', 'WIPRO', 'YESBANK', 'ZYDUSLIFE', 'BANDHANBNK'
 ]
-# --------------------------------------------------------------
+
+# -----------------------
+# Setup IO paths
+# -----------------------
 
 input_path = os.path.join(base_folder, input_parquet_name)
-results_path = os.path.join(os.getcwd(), results_folder)
+results_path = os.path.join(base_folder, results_folder)
 os.makedirs(results_path, exist_ok=True)
 
-current_date = datetime.now().strftime('%Y-%m-%d')
+current_date = datetime.now().strftime("%Y-%m-%d")
 output_filename = f"ou_signals_{current_date}.csv"
 output_path = os.path.join(results_path, output_filename)
 
+# -------------------------------------------------------------------------
+# OU CALCULATION (unchanged)
+# -------------------------------------------------------------------------
 
-# --------------------------------------------------------------------------
-# 1. OU CALCULATION (EXACTLY MATCHES 1.py)
-# --------------------------------------------------------------------------
-def calculate_ou_parameters_at_bar(prices, bar_idx):
+def calculate_ou_parameters_at_bar(prices, reg_window, ma_length, bar_idx):
+
     if bar_idx < ma_length + reg_window:
         return None
 
     prices_subset = prices.iloc[:bar_idx + 1]
-    long_term_mean = prices_subset.rolling(ma_length).mean()
-    Xt = prices_subset - long_term_mean
+    long_mean = prices_subset.rolling(ma_length).mean()
 
+    Xt = prices_subset - long_mean
     dX = Xt.diff()
     X_prev = Xt.shift(1)
 
-    last_idx = len(prices_subset) - 1
-    start_idx = last_idx - reg_window + 1
-    if start_idx < ma_length + 1:
+    last = len(prices_subset) - 1
+    start = last - reg_window + 1
+    if start < ma_length + 1:
         return None
 
-    X_vals = X_prev.iloc[start_idx:last_idx + 1].values
-    dX_vals = dX.iloc[start_idx:last_idx + 1].values
+    X_vals = X_prev.iloc[start:last + 1].values
+    dX_vals = dX.iloc[start:last + 1].values
 
     valid = ~(np.isnan(X_vals) | np.isnan(dX_vals))
     X_vals = X_vals[valid]
@@ -86,151 +92,137 @@ def calculate_ou_parameters_at_bar(prices, bar_idx):
         return None
 
     n = len(X_vals)
-    sum_x = X_vals.sum()
-    sum_y = dX_vals.sum()
-    sum_xy = (X_vals * dX_vals).sum()
-    sum_x2 = (X_vals * X_vals).sum()
+    sx = X_vals.sum()
+    sy = dX_vals.sum()
+    sxy = (X_vals * dX_vals).sum()
+    sx2 = (X_vals ** 2).sum()
 
-    denom = n * sum_x2 - sum_x**2
+    denom = n * sx2 - sx ** 2
     if denom == 0:
         return None
 
-    slope_b = (n * sum_xy - sum_x * sum_y) / denom
-    intercept_a = (sum_y - slope_b * sum_x) / n
+    b = (n * sxy - sx * sy) / denom
+    a = (sy - b * sx) / n
 
-    if slope_b >= 0 or slope_b <= -1:
+    if b >= 0 or b <= -1:
         return None
 
-    theta = -np.log(1 + slope_b)
+    theta = -np.log(1 + b)
     if theta <= 0:
         return None
 
-    mu_ou = intercept_a / (1 - np.exp(-theta))
+    mu = a / (1 - np.exp(-theta))
 
-    predicted = intercept_a + slope_b * X_vals
-    residuals = dX_vals - predicted
-    sigma_ou = np.sqrt((residuals**2).sum() / (len(X_vals) - 2))
+    pred = a + b * X_vals
+    resid = dX_vals - pred
+    sigma = np.sqrt((resid ** 2).sum() / (len(X_vals) - 2))
 
-    eq_var = (sigma_ou**2) / (2 * theta)
-    eq_std = np.sqrt(eq_var)
+    eq_var = sigma ** 2 / (2 * theta)
+    eq_sd = np.sqrt(eq_var)
 
-    band_upper = mu_ou + 2 * eq_std
-    band_lower = mu_ou - 2 * eq_std
+    upper = mu + 2 * eq_sd
+    lower = mu - 2 * eq_sd
     half_life = np.log(2) / theta
 
     return {
         "theta": theta,
         "half_life": half_life,
         "Xt": Xt.iloc[-1],
-        "band_upper": band_upper,
-        "band_lower": band_lower
+        "upper": upper,
+        "lower": lower
     }
 
+# -------------------------------------------------------------------------
+# SIGNAL DETECTION (unchanged)
+# -------------------------------------------------------------------------
 
-# --------------------------------------------------------------------------
-# 2. DETECT SIGNALS (EXACT LOGIC FROM 1.py)
-# --------------------------------------------------------------------------
-def detect_signals(symbol_data):
-    symbol_data = symbol_data.sort_values("Date").reset_index(drop=True)
+def detect_signals(df_symbol):
 
-    if len(symbol_data) < ma_length + reg_window + 1:
+    df_symbol = df_symbol.sort_values("Date").reset_index(drop=True)
+    if len(df_symbol) < ma_length + reg_window + 1:
         return []
 
-    last = len(symbol_data) - 1
+    last = len(df_symbol) - 1
     prev = last - 1
 
-    prev_params = calculate_ou_parameters_at_bar(symbol_data["Close"], prev)
-    curr_params = calculate_ou_parameters_at_bar(symbol_data["Close"], last)
+    prev_params = calculate_ou_parameters_at_bar(df_symbol["Close"], reg_window, ma_length, prev)
+    curr_params = calculate_ou_parameters_at_bar(df_symbol["Close"], reg_window, ma_length, last)
 
     if prev_params is None or curr_params is None:
         return []
 
     theta = curr_params["theta"]
-    half_life = curr_params["half_life"]
+    hl = curr_params["half_life"]
+    regime = (theta >= min_theta and hl <= max_half_life)
 
-    Xt_prev = prev_params["Xt"]
-    Xt_curr = curr_params["Xt"]
+    Xp = prev_params["Xt"]
+    Xc = curr_params["Xt"]
 
-    lower_prev = prev_params["band_lower"]
-    lower_curr = curr_params["band_lower"]
+    lp = prev_params["lower"]
+    up = prev_params["upper"]
 
-    upper_prev = prev_params["band_upper"]
-    upper_curr = curr_params["band_upper"]
+    lc = curr_params["lower"]
+    uc = curr_params["upper"]
 
-    regime_ok = (theta >= min_theta) and (half_life <= max_half_life)
+    raw_buy = (Xp >= lp) and (Xc < lc) and (Xc < Xp)
+    raw_sell = (Xp <= up) and (Xc > uc) and (Xc > Xp)
 
-    # DIRECTIONAL CROSS LOGIC (matches TradingView)
-    raw_buy = (Xt_prev >= lower_prev) and (Xt_curr < lower_curr) and (Xt_curr < Xt_prev)
-    raw_sell = (Xt_prev <= upper_prev) and (Xt_curr > upper_curr) and (Xt_curr > Xt_prev)
+    date = df_symbol["Date"].iloc[last]
+    close = df_symbol["Close"].iloc[last]
 
-    buy = raw_buy and regime_ok
-    sell = raw_sell and regime_ok
-
-    date = symbol_data["Date"].iloc[last]
-    close = symbol_data["Close"].iloc[last]
-
-    out = []
-    if buy or sell:
-        out.append({
-            "Signal": "BUY" if buy else "SELL",
+    if raw_buy or raw_sell:
+        sig = "BUY" if raw_buy else "SELL"
+        return [{
+            "Symbol": df_symbol["Symbol"].iloc[0],
             "Date": date,
             "Close": close,
+            "Signal": sig,
             "Theta": theta,
-            "Half_Life": half_life,
-            "Deviation_Xt": Xt_curr,
-            "Prev_Xt": Xt_prev,
-            "Upper_Band": upper_curr,
-            "Lower_Band": lower_curr,
-            "Regime_Valid": True
-        })
-    elif raw_buy or raw_sell:
-        out.append({
-            "Signal": "FILTERED_BUY" if raw_buy else "FILTERED_SELL",
-            "Date": date,
-            "Close": close,
-            "Theta": theta,
-            "Half_Life": half_life,
-            "Deviation_Xt": Xt_curr,
-            "Prev_Xt": Xt_prev,
-            "Upper_Band": upper_curr,
-            "Lower_Band": lower_curr,
-            "Regime_Valid": False
-        })
+            "Half_Life": hl,
+            "Deviation_Xt": Xc,
+            "Prev_Xt": Xp,
+            "Upper_Band": uc,
+            "Lower_Band": lc,
+            "Regime_Valid": regime
+        }]
 
-    return out
+    return []
 
+# -------------------------------------------------------------------------
+# MAIN
+# -------------------------------------------------------------------------
 
-# --------------------------------------------------------------------------
-# 3. MAIN EXECUTION
-# --------------------------------------------------------------------------
-print("Loading daily_ohlc.parquet...")
+print("OU Scanner for Selected Symbols")
+print("Loading:", input_path)
+
 df = pd.read_parquet(input_path)
 df["Date"] = pd.to_datetime(df["Date"])
 
 available = set(df["Symbol"].unique())
-symbols = []
 
-# Create mapping sym vs sym.NS
+###
+# Build (symbol, symbol.NS)
+###
+matchlist = set()
 for s in SYMBOLS_TO_SCAN:
-    if s in available:
-        symbols.append(s)
-    if s + ".NS" in available:
-        symbols.append(s + ".NS")
+    matchlist.add(s)
+    matchlist.add(s + ".NS")
 
-symbols = sorted(set(symbols))
-
-print(f"Scanning {len(symbols)} symbols...")
+symbols = sorted(list(available & matchlist))
 
 results = []
+
 for sym in symbols:
-    data = df[df["Symbol"] == sym]
-    sig = detect_signals(data)
-    for s in sig:
-        s["Symbol"] = sym
-        results.append(s)
+    sub = df[df["Symbol"] == sym].copy()
+    sigs = detect_signals(sub)
+    results.extend(sigs)
 
-results_df = pd.DataFrame(results)
-results_df = results_df.sort_values("Date", ascending=False)
-results_df.to_csv(output_path, index=False)
+if results:
+    outdf = pd.DataFrame(results)
+    outdf = outdf.sort_values("Date", ascending=False)
+    outdf.to_csv(output_path, index=False)
+    print("Saved:", output_path)
+else:
+    print("No signals found.")
 
-print(f"Done. Saved {len(results_df)} signals → {output_path}")
+print("Done.")
