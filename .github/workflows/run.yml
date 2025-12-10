@@ -47,16 +47,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Stage files only if they exist (prevents errors)
-          if [ -n "$(ls data/*.parquet 2>/dev/null)" ]; then git add data/*.parquet; fi
-          if [ -n "$(ls data/*.log 2>/dev/null)" ]; then git add data/*.log; fi
-          if [ -n "$(ls results_all/* 2>/dev/null)" ]; then git add results_all/*; fi
-          if [ -n "$(ls results_selected/* 2>/dev/null)" ]; then git add results_selected/*; fi
+          # Stage files only if they exist
+          if ls scripts/data/*.parquet 1> /dev/null 2>&1; then git add scripts/data/*.parquet; fi
+          if ls scripts/data/*.log 1> /dev/null 2>&1; then git add scripts/data/*.log; fi
+          if ls results_all/* 1> /dev/null 2>&1; then git add results_all/*; fi
+          if ls results_selected/* 1> /dev/null 2>&1; then git add results_selected/*; fi
 
           # Commit only if staged changes exist
           if ! git diff --staged --quiet; then
             git commit -m "Auto update from scheduled workflow [skip ci]"
             git push
           else
-            echo "No output changes to commit."
+            echo "No changes to commit."
           fi
