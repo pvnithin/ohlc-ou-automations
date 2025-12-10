@@ -27,7 +27,6 @@ jobs:
 
       - name: Ensure directories exist (both locations)
         run: |
-          # ensure both possible target folders exist (scripts/ and root)
           mkdir -p scripts/data scripts/results_all scripts/results_selected
           mkdir -p data results_all results_selected
           mkdir -p outputs
@@ -52,27 +51,56 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Stage possible parquet/log locations (root and scripts)
           if ls data/*.parquet 1> /dev/null 2>&1; then git add data/*.parquet; fi
           if ls scripts/data/*.parquet 1> /dev/null 2>&1; then git add scripts/data/*.parquet; fi
 
           if ls data/*.log 1> /dev/null 2>&1; then git add data/*.log; fi
           if ls scripts/data/*.log 1> /dev/null 2>&1; then git add scripts/data/*.log; fi
 
-          # Stage OU results in either location
           if ls results_all/* 1> /dev/null 2>&1; then git add results_all/*; fi
           if ls scripts/results_all/* 1> /dev/null 2>&1; then git add scripts/results_all/*; fi
 
           if ls results_selected/* 1> /dev/null 2>&1; then git add results_selected/*; fi
           if ls scripts/results_selected/* 1> /dev/null 2>&1; then git add scripts/results_selected/*; fi
 
-          # Always add the run marker so we see a commit every run
           git add outputs/last_run.txt || true
 
-          # Commit only if staged changes exist (it will when marker changed)
           if ! git diff --staged --quiet; then
             git commit -m "Auto update from scheduled workflow [skip ci]"
             git push
           else
             echo "No changes to commit."
           fi
+
+      # -----------------------------------------------------------
+      # NEW STEP: TELEGRAM ALERT FOR BUY SIGNALS (SYMBOLS ONLY)
+      # -----------------------------------------------------------
+      - name: Send Telegram Alerts
+        run: |
+          TODAY=$(date +"%Y-%m-%d")
+
+          # File may exist in either location
+          FILE1="results_all/ou_signals_all_${TODAY}.csv"
+          FILE2="scripts/results_all/ou_signals_all_${TODAY}.csv"
+
+          if [ -f "$FILE1" ]; then
+            FILE="$FILE1"
+          elif [ -f "$FILE2" ]; then
+            FILE="$FILE2"
+          else
+            echo "No output file found for today."
+            exit 0
+          fi
+
+          # Extract ONLY Symbol column (header removed)
+          SYMBOLS=$(awk -F',' 'NR>1 {print $12}' "$FILE" | tr '\n' ' ')
+
+          if [ -z "$SYMBOLS" ]; then
+            MESSAGE="📉 No BUY signals today."
+          else
+            MESSAGE="📈 BUY Signals Today:\n$SYMBOLS"
+          fi
+
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="$MESSAGE"
