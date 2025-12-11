@@ -2,11 +2,14 @@ import os
 import pandas as pd
 import google.generativeai as genai
 from datetime import datetime
+import time
 
 # --- Configuration ---
 API_KEY = os.environ.get("GEMINI_API_KEY")
 OUTPUT_FILE = "outputs/research_report.md"
 INPUT_FOLDER = "results_all"
+# UPDATED MODEL NAME: Using the new stable 2.5 Pro
+MODEL_NAME = "gemini-2.5-pro" 
 
 def get_buy_signals():
     """Finds today's CSV and extracts BUY signals"""
@@ -33,9 +36,14 @@ def run_research(symbols):
     if not API_KEY:
         return "⚠️ Research skipped (No API Key)"
 
+    print(f"Initializing {MODEL_NAME}...")
     genai.configure(api_key=API_KEY)
-    # Using 'gemini-1.5-flash' for speed/cost efficiency
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    
+    # Safety: Verify model access or fall back
+    try:
+        model = genai.GenerativeModel(MODEL_NAME)
+    except Exception as e:
+        return f"⚠️ Model Error: {e}"
 
     symbols_str = ", ".join(symbols)
     
@@ -78,7 +86,9 @@ def run_research(symbols):
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        return f"⚠️ Gemini Error: {e}"
+        # Fallback if Pro is overloaded or rate-limited
+        print(f"Error with Pro model: {e}")
+        return f"⚠️ Research Failed: {e}"
 
 def main():
     os.makedirs("outputs", exist_ok=True)
