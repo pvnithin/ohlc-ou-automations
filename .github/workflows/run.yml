@@ -29,14 +29,100 @@ jobs:
         run: |
           mkdir -p data results_all results_selected outputs
 
-      - name: Run ohlc.py
-        run: python scripts/ohlc.py
+      - name: Check existing data (BEFORE ohlc.py)
+        run: |
+          echo "=== CHECKING EXISTING DATA ==="
+          if [ -f "data/daily_ohlc.parquet" ]; then
+            echo "✓ Parquet file exists"
+            python3 -c "
+          import pandas as pd
+          from datetime import datetime
+          df = pd.read_parquet('data/daily_ohlc.parquet')
+          df['Date'] = pd.to_datetime(df['Date'])
+          print(f'Total records: {len(df)}')
+          print(f'Total symbols: {df[\"Symbol\"].nunique()}')
+          print(f'Latest date in file: {df[\"Date\"].max()}')
+          print(f'Today is: {datetime.now().strftime(\"%Y-%m-%d\")}')"
+          else
+            echo "✗ No existing parquet file"
+          fi
+
+      - name: Run ohlc.py (Fetch Latest Data)
+        run: |
+          echo "=== RUNNING OHLC DATA FETCH ==="
+          python scripts/ohlc.py
+          echo "=== OHLC FETCH COMPLETE ==="
+
+      - name: Verify data update (AFTER ohlc.py)
+        run: |
+          echo "=== VERIFYING DATA UPDATE ==="
+          python3 -c "
+          import pandas as pd
+          from datetime import datetime, timedelta
+          df = pd.read_parquet('data/daily_ohlc.parquet')
+          df['Date'] = pd.to_datetime(df['Date'])
+          latest = df['Date'].max()
+          today = datetime.now().date()
+          yesterday = today - timedelta(days=1)
+          
+          print(f'Latest date in parquet: {latest.date()}')
+          print(f'Today: {today}')
+          print(f'Yesterday: {yesterday}')
+          
+          # Check if data is fresh (today or yesterday for market days)
+          if latest.date() >= yesterday:
+              print('✓ Data is FRESH')
+          else:
+              print(f'⚠️ WARNING: Data is STALE (last update: {latest.date()})')
+              print('This will cause incorrect signals!')
+          
+          # Show sample of latest data
+          print('\nLatest 5 records:')
+          print(df.nlargest(5, 'Date')[['Symbol', 'Date', 'Close']])
+          "
 
       - name: Run oucheck.py (All Stocks)
-        run: python scripts/oucheck.py
+        run: |
+          echo "=== RUNNING OU CHECK (ALL STOCKS) ==="
+          python scripts/oucheck.py | tee ou_check_all.log
+          echo "=== OU CHECK ALL COMPLETE ==="
 
       - name: Run oucheck1.py (Selected Stocks)
-        run: python scripts/oucheck1.py
+        run: |
+          echo "=== RUNNING OU CHECK (SELECTED STOCKS) ==="
+          python scripts/oucheck1.py | tee ou_check_selected.log
+          echo "=== OU CHECK SELECTED COMPLETE ==="
+
+      - name: Verify signal outputs
+        run: |
+          echo "=== VERIFYING SIGNAL OUTPUTS ==="
+          TODAY=$(date +"%Y-%m-%d")
+          FILE_ALL="results_all/ou_signals_all_${TODAY}.csv"
+          FILE_SELECTED="results_selected/ou_signals_selected_${TODAY}.csv"
+          
+          echo "Checking for: $FILE_ALL"
+          if [ -f "$FILE_ALL" ]; then
+            echo "✓ All stocks signal file exists"
+            wc -l "$FILE_ALL"
+            echo "First 5 lines:"
+            head -5 "$FILE_ALL"
+            echo ""
+            echo "BUY signals:"
+            grep -c "BUY" "$FILE_ALL" || echo "0 BUY signals"
+            echo "SELL signals:"
+            grep -c "SELL" "$FILE_ALL" || echo "0 SELL signals"
+          else
+            echo "✗ All stocks signal file NOT FOUND"
+          fi
+          
+          echo ""
+          echo "Checking for: $FILE_SELECTED"
+          if [ -f "$FILE_SELECTED" ]; then
+            echo "✓ Selected stocks signal file exists"
+            wc -l "$FILE_SELECTED"
+          else
+            echo "✗ Selected stocks signal file NOT FOUND"
+          fi
 
       - name: Write run marker
         run: |
@@ -49,7 +135,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          git add -A data/*.parquet data/*.log results_all/* results_selected/* outputs/last_run.txt || true
+          git add -A data/*.parquet data/*.log results_all/* results_selected/* outputs/last_run.txt *.log || true
           
           if ! git diff --staged --quiet; then
             git commit -m "Auto update from scheduled workflow [skip ci]"
@@ -70,16 +156,22 @@ jobs:
             echo "No output file found for today: $FILE"
             curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
               -d chat_id="${TELEGRAM_CHAT_ID}" \
-              -d text="📊 No signals file generated today."
+              -d text="⚠️ No signals file generated today (${TODAY}). Check workflow logs."
             exit 0
           fi
           
-          BUY_SIGNALS=$(awk -F',' '$4 == "BUY" {print $1}' "$FILE" | grep -v "Symbol" | sed 's/\.NS//g' | tr '\n' ' ')
+          # Count total lines (excluding header)
+          TOTAL_LINES=$(wc -l < "$FILE")
+          TOTAL_SIGNALS=$((TOTAL_LINES - 1))
           
-          if [ -z "$BUY_SIGNALS" ]; then
-            MESSAGE="📉 No BUY signals today (${TODAY})"
+          # Extract BUY signals only
+          BUY_SIGNALS=$(awk -F',' '$4 == "BUY" {print $1}' "$FILE" | grep -v "Symbol" | sed 's/\.NS//g' | tr '\n' ' ')
+          BUY_COUNT=$(echo "$BUY_SIGNALS" | wc -w)
+          
+          if [ -z "$BUY_SIGNALS" ] || [ "$BUY_COUNT" -eq 0 ]; then
+            MESSAGE="📉 No BUY signals today (${TODAY})%0ATotal signals scanned: ${TOTAL_SIGNALS}"
           else
-            MESSAGE="📈 BUY Signals Today (${TODAY}): ${BUY_SIGNALS}"
+            MESSAGE="📈 BUY Signals Today (${TODAY}):%0ACount: ${BUY_COUNT}%0A%0A${BUY_SIGNALS}"
           fi
           
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
