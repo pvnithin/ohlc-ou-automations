@@ -98,82 +98,80 @@ jobs:
           echo "=== VERIFYING SIGNAL OUTPUTS ==="
           TODAY=$(date +"%Y-%m-%d")
           FILE_ALL="results_all/ou_signals_all_${TODAY}.csv"
-          FILE_SELECTED="results_selected/ou_signals_selected_${TODAY}.csv"
-          
-          echo "Checking for: $FILE_ALL"
           if [ -f "$FILE_ALL" ]; then
-            echo "✓ All stocks signal file exists"
-            wc -l "$FILE_ALL"
-            echo "First 5 lines:"
-            head -5 "$FILE_ALL"
-            echo ""
-            echo "BUY signals:"
-            grep -c "BUY" "$FILE_ALL" || echo "0 BUY signals"
-            echo "SELL signals:"
-            grep -c "SELL" "$FILE_ALL" || echo "0 SELL signals"
+            echo "✓ Signal file found"
           else
-            echo "✗ All stocks signal file NOT FOUND"
-          fi
-          
-          echo ""
-          echo "Checking for: $FILE_SELECTED"
-          if [ -f "$FILE_SELECTED" ]; then
-            echo "✓ Selected stocks signal file exists"
-            wc -l "$FILE_SELECTED"
-          else
-            echo "✗ Selected stocks signal file NOT FOUND"
+            echo "✗ Signal file NOT FOUND"
+            exit 0
           fi
 
-      - name: Write run marker
+      - name: Run Gemini Research Agent
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          echo "Last run: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" > outputs/last_run.txt
-          echo "Runner: $RUNNER_OS" >> outputs/last_run.txt
-          cat outputs/last_run.txt
+          echo "=== RUNNING GEMINI RESEARCH ==="
+          if [ -z "$GEMINI_API_KEY" ]; then
+             echo "Warning: GEMINI_API_KEY not set."
+          else
+             python scripts/research_agent.py
+          fi
+
+      - name: Generate DOCX Report
+        run: |
+          echo "=== GENERATING DOCX ==="
+          REPORT_MD="outputs/research_report.md"
+          REPORT_DOCX="outputs/Research_Report_$(date +'%Y-%m-%d').docx"
+          
+          # Check if report exists and isn't the "NO_SIGNALS" flag
+          if [ -f "$REPORT_MD" ] && ! grep -q "NO_SIGNALS" "$REPORT_MD"; then
+            # Install Pandoc (Fast, standard converter)
+            sudo apt-get update && sudo apt-get install -y pandoc
+            
+            # Convert Markdown to DOCX
+            pandoc "$REPORT_MD" -o "$REPORT_DOCX" --toc --toc-depth=2
+            
+            echo "✓ Generated $REPORT_DOCX"
+          else
+            echo "No research content to convert."
+          fi
+
+      - name: Send Report via Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          TODAY=$(date +"%Y-%m-%d")
+          REPORT_DOCX="outputs/Research_Report_${TODAY}.docx"
+          
+          if [ -f "$REPORT_DOCX" ]; then
+             echo "Sending Document to Telegram..."
+             
+             # Send ONLY the document. No long text message.
+             curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+               -F chat_id="${TELEGRAM_CHAT_ID}" \
+               -F document=@"$REPORT_DOCX" \
+               -F caption="📊 Strategic Research Report (${TODAY})"
+          else
+             echo "No report file to send."
+             
+             # Optional: Send a tiny alert if no signals were found at all
+             # Uncomment below if you want to know when nothing happened
+             # curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+             #   -d chat_id="${TELEGRAM_CHAT_ID}" \
+             #   -d text="No strategic buy signals generated for ${TODAY}."
+          fi
 
       - name: Commit updated output files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          git add -A data/*.parquet data/*.log results_all/* results_selected/* outputs/last_run.txt *.log || true
+          # Commit the parquet, signals, AND the new DOCX report
+          git add -A data/*.parquet results_all/* outputs/*.docx || true
           
           if ! git diff --staged --quiet; then
-            git commit -m "Auto update from scheduled workflow [skip ci]"
+            git commit -m "Auto update: Signals + Research Report [skip ci]"
             git push
           else
             echo "No changes to commit."
           fi
-
-      - name: Send Telegram Alerts (BUY signals only)
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          TODAY=$(date +"%Y-%m-%d")
-          FILE="results_all/ou_signals_all_${TODAY}.csv"
-          
-          if [ ! -f "$FILE" ]; then
-            echo "No output file found for today: $FILE"
-            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-              -d chat_id="${TELEGRAM_CHAT_ID}" \
-              -d text="⚠️ No signals file generated today (${TODAY}). Check workflow logs."
-            exit 0
-          fi
-          
-          # Count total lines (excluding header)
-          TOTAL_LINES=$(wc -l < "$FILE")
-          TOTAL_SIGNALS=$((TOTAL_LINES - 1))
-          
-          # Extract BUY signals only
-          BUY_SIGNALS=$(awk -F',' '$4 == "BUY" {print $1}' "$FILE" | grep -v "Symbol" | sed 's/\.NS//g' | tr '\n' ' ')
-          BUY_COUNT=$(echo "$BUY_SIGNALS" | wc -w)
-          
-          if [ -z "$BUY_SIGNALS" ] || [ "$BUY_COUNT" -eq 0 ]; then
-            MESSAGE="📉 No BUY signals today (${TODAY})%0ATotal signals scanned: ${TOTAL_SIGNALS}"
-          else
-            MESSAGE="📈 BUY Signals Today (${TODAY}):%0ACount: ${BUY_COUNT}%0A%0A${BUY_SIGNALS}"
-          fi
-          
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d text="${MESSAGE}"
