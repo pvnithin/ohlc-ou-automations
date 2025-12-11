@@ -1,13 +1,18 @@
 import os
 import pandas as pd
-from google import genai  # <--- NEW IMPORT SYNTAX
+from google import genai
 from datetime import datetime
+import time
 
 # --- Configuration ---
 API_KEY = os.environ.get("GEMINI_API_KEY")
 OUTPUT_FILE = "outputs/research_report.md"
 INPUT_FOLDER = "results_all"
-MODEL_NAME = "gemini-2.0-pro-exp-02-05" # Or "gemini-2.5-pro" if available in your region
+
+# CORRECT STABLE MODEL
+MODEL_PRIMARY = "gemini-2.5-pro"
+# Fallback Model (Reliable & Fast)
+MODEL_FALLBACK = "gemini-2.5-flash"
 
 def get_buy_signals():
     """Finds today's CSV and extracts BUY signals"""
@@ -33,59 +38,67 @@ def run_research(symbols):
     if not API_KEY:
         return "⚠️ Research skipped (No API Key)"
 
-    print(f"Initializing {MODEL_NAME} with new SDK...")
+    # Initialize Client (New SDK)
+    client = genai.Client(api_key=API_KEY)
     
+    symbols_str = ", ".join(symbols)
+    
+    prompt = f"""
+    Role: Act as a Senior Equity Research Analyst for a top-tier Indian institutional fund. 
+    Task: Generate a "Strategic Equity Research Report" for: {symbols_str}.
+
+    Tone: Professional, ruthless, analytical. Use terms like "Capital Efficiency," "Moat Durability," "Sovereign Moat."
+
+    Report Structure (Use Markdown formatting heavily):
+    
+    # Executive Summary
+    Define the market phase and dominant themes (e.g., Infra Super-Cycle, Rural Distress).
+    
+    # Thematic Landscape
+    Group stocks into themes. Identify Leaders vs Laggards.
+
+    # Fundamental Data Matrix
+    (Create a Markdown Table with columns: Ticker, P/E, ROCE %, Debt/Equity, Pledge %, Moat Rating, Verdict).
+
+    # High Conviction Ideas (Top 3)
+    Analyze Cash Flow (OCF/EBITDA), Moat, and Valuation.
+
+    # Red Flags & Avoids
+    Highlight Pledge Traps (>10%) or Capital Destroyers.
+
+    # Investment Verdicts
+    * **Tier 1 (Strategic Buys):** ...
+    * **Tier 2 (Accumulate):** ...
+    * **Tier 3 (Avoid):** ...
+
+    Constraints:
+    - Use latest data.
+    - Be decisive (Buy/Sell/Avoid).
+    """
+
+    # Try Primary Model (Gemini 2.5 Pro)
     try:
-        # NEW SDK INITIALIZATION
-        client = genai.Client(api_key=API_KEY)
+        print(f"Running research on: {symbols_str}")
+        print(f"Attempting with {MODEL_PRIMARY}...")
         
-        symbols_str = ", ".join(symbols)
-        
-        prompt = f"""
-        Role: Act as a Senior Equity Research Analyst for a top-tier Indian institutional fund. 
-        Task: Generate a "Strategic Equity Research Report" for: {symbols_str}.
-
-        Tone: Professional, ruthless, analytical. Use terms like "Capital Efficiency," "Moat Durability," "Sovereign Moat."
-
-        Report Structure (Use Markdown formatting heavily):
-        
-        # Executive Summary
-        Define the market phase and dominant themes (e.g., Infra Super-Cycle, Rural Distress).
-        
-        # Thematic Landscape
-        Group stocks into themes. Identify Leaders vs Laggards.
-
-        # Fundamental Data Matrix
-        (Create a Markdown Table with columns: Ticker, P/E, ROCE %, Debt/Equity, Pledge %, Moat Rating, Verdict).
-
-        # High Conviction Ideas (Top 3)
-        Analyze Cash Flow (OCF/EBITDA), Moat, and Valuation.
-
-        # Red Flags & Avoids
-        Highlight Pledge Traps (>10%) or Capital Destroyers.
-
-        # Investment Verdicts
-        * **Tier 1 (Strategic Buys):** ...
-        * **Tier 2 (Accumulate):** ...
-        * **Tier 3 (Avoid):** ...
-
-        Constraints:
-        - Use latest data.
-        - Be decisive (Buy/Sell/Avoid).
-        """
-
-        print(f"Running research on: {symbols_str}...")
-        
-        # NEW GENERATION CALL
         response = client.models.generate_content(
-            model=MODEL_NAME,
+            model=MODEL_PRIMARY,
             contents=prompt
         )
         return response.text
         
     except Exception as e:
-        print(f"Error with Gemini Client: {e}")
-        return f"⚠️ Research Failed: {e}"
+        print(f"⚠️ Primary model ({MODEL_PRIMARY}) failed: {e}")
+        print(f"🔄 Switching to Fallback: {MODEL_FALLBACK}...")
+        
+        try:
+            response = client.models.generate_content(
+                model=MODEL_FALLBACK,
+                contents=prompt
+            )
+            return response.text
+        except Exception as e2:
+            return f"⚠️ Research Failed completely: {e2}"
 
 def main():
     os.makedirs("outputs", exist_ok=True)
