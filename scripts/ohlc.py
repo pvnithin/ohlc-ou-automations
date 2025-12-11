@@ -128,6 +128,18 @@ if symbols_to_fetch_full:
             if 'Date' in hist.columns:
                 hist['Date'] = hist['Date'].dt.tz_localize(None)
             
+            # --- DATE LOGIC MODIFICATION START ---
+            # If the market is open, 'period=5y' returns today's live/incomplete candle.
+            # We explicitly check if the last row is TODAY, and remove it if so.
+            if not hist.empty:
+                last_row_date = hist['Date'].iloc[-1].date()
+                if last_row_date == datetime.now().date():
+                    hist = hist.iloc[:-1]
+                    if hist.empty:
+                        print(f"✓ (Skipped today's incomplete candle)")
+                        continue
+            # --- DATE LOGIC MODIFICATION END ---
+
             hist = hist[['Date', 'Open', 'High', 'Low', 'Close', 'Volume']]
             hist['Symbol'] = sym
             
@@ -164,6 +176,17 @@ if symbols_to_update:
             hist = hist.reset_index()
             if 'Date' in hist.columns:
                 hist['Date'] = hist['Date'].dt.tz_localize(None)
+            
+            # --- DATE LOGIC MODIFICATION START ---
+            # Redundant safety check for incremental updates as well
+            if not hist.empty:
+                last_row_date = hist['Date'].iloc[-1].date()
+                if last_row_date == datetime.now().date():
+                    hist = hist.iloc[:-1]
+                    if hist.empty:
+                        print(f"✓ (Skipped today's incomplete candle)")
+                        continue
+            # --- DATE LOGIC MODIFICATION END ---
             
             hist = hist[['Date', 'Open', 'High', 'Low', 'Close', 'Volume']]
             hist['Symbol'] = sym
