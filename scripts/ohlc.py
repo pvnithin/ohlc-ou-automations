@@ -5,27 +5,31 @@ from datetime import datetime, timedelta
 
 # --- Configuration ---
 lookback_period = "5y" 
-# Changed to Option A: store data under repository ./data
-base_folder = os.path.join(os.getcwd(), "data")
-os.makedirs(base_folder, exist_ok=True)
-
+# Use relative paths from scripts folder
+script_dir = os.path.dirname(os.path.abspath(__file__))
+base_folder = os.path.dirname(script_dir)  # Parent directory (repo root)
+data_folder = os.path.join(base_folder, "data")
 input_csv_name = "nse stocks.csv"
 output_parquet_name = "daily_ohlc.parquet"
 failure_log_name = "failed_symbols.log"
 # --- End Configuration ---
 
 # Construct full paths
-csv_path = os.path.join(base_folder, input_csv_name)
-output_path = os.path.join(base_folder, output_parquet_name)
-log_path = os.path.join(base_folder, failure_log_name)
+csv_path = os.path.join(data_folder, input_csv_name)
+output_path = os.path.join(data_folder, output_parquet_name)
+log_path = os.path.join(data_folder, failure_log_name)
+
+# Create data folder if it doesn't exist
+os.makedirs(data_folder, exist_ok=True)
 
 # --- 1. Read Master List of Symbols ---
 try:
     df = pd.read_csv(csv_path)
     all_symbols_master_list = set(df['SYMBOL'].dropna().unique())
+    print(f"Loaded {len(all_symbols_master_list)} symbols from CSV")
 except FileNotFoundError:
     print(f"Error: Input file not found at {csv_path}")
-    print(f"Please make sure '{input_csv_name}' is in the '{base_folder}' folder.")
+    print(f"Please make sure '{input_csv_name}' is in the 'data' folder.")
     exit()
 
 # --- 2. Check for Existing Data ---
