@@ -1,4 +1,5 @@
-name: Run OHLC + OU Scans + Deep Research
+name: Run OHLC + OU Scans (Mon–Fri 06:00 IST)
+
 on:
   schedule:
     - cron: "30 0 * * 1-5"   # 06:00 IST -> 00:30 UTC
@@ -23,20 +24,18 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          # Explicitly install the new Gemini library here to ensure it exists
-          pip install google-genai pandas pyarrow yfinance
+          # Ensure essential libraries are present
+          pip install pandas pyarrow yfinance
 
       - name: Ensure directories exist
         run: |
           mkdir -p data results_all results_selected outputs
 
-      # --- 2. DATA FETCH & VALIDATION ---
-      - name: Check existing data (BEFORE ohlc.py)
+      # --- 2. DATA FETCH ---
+      - name: Check existing data
         run: |
-          echo "=== CHECKING EXISTING DATA ==="
           if [ -f "data/daily_ohlc.parquet" ]; then
             echo "✓ Parquet file exists"
-            python3 -c "import pandas as pd; df = pd.read_parquet('data/daily_ohlc.parquet'); print(f'Total records: {len(df)}')"
           else
             echo "✗ No existing parquet file"
           fi
@@ -45,11 +44,9 @@ jobs:
         run: |
           echo "=== RUNNING OHLC DATA FETCH ==="
           python scripts/ohlc.py
-          echo "=== OHLC FETCH COMPLETE ==="
 
-      - name: Verify data update (AFTER ohlc.py)
+      - name: Verify data update
         run: |
-          echo "=== VERIFYING DATA UPDATE ==="
           python3 -c "
           import pandas as pd
           from datetime import datetime, timedelta
@@ -58,17 +55,12 @@ jobs:
               df['Date'] = pd.to_datetime(df['Date'])
               latest = df['Date'].max().date()
               today = datetime.now().date()
-              yesterday = today - timedelta(days=1)
-              print(f'Latest date: {latest}')
-              if latest >= yesterday:
-                  print('✓ Data is FRESH')
-              else:
-                  print(f'⚠️ WARNING: Data is STALE (last update: {latest})')
+              print(f'Latest date in data: {latest}')
           except Exception as e:
-              print(f'Error reading parquet: {e}')
+              print(f'Error verification: {e}')
           "
 
-      # --- 3. TECHNICAL ANALYSIS ---
+      # --- 3. TECHNICAL SCANS ---
       - name: Run oucheck.py (All Stocks)
         run: |
           echo "=== RUNNING OU CHECK (ALL STOCKS) ==="
@@ -79,93 +71,58 @@ jobs:
           echo "=== RUNNING OU CHECK (SELECTED STOCKS) ==="
           python scripts/oucheck1.py | tee ou_check_selected.log
 
-      - name: Verify signal outputs
-        run: |
-          echo "=== VERIFYING SIGNAL OUTPUTS ==="
-          TODAY=$(date +"%Y-%m-%d")
-          FILE_ALL="results_all/ou_signals_all_${TODAY}.csv"
-          if [ -f "$FILE_ALL" ]; then
-            echo "✓ Signal file found"
-          else
-            echo "✗ Signal file NOT FOUND"
-            # We don't exit here so that we can still commit logs if needed, 
-            # but the research step will handle the empty case.
-          fi
-
-      # --- 4. AI RESEARCH & REPORT GENERATION ---
-      - name: Run Gemini Research Agent
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          echo "=== RUNNING GEMINI RESEARCH ==="
-          if [ -z "$GEMINI_API_KEY" ]; then
-             echo "Warning: GEMINI_API_KEY not set. Skipping research."
-          else
-             # We rely on the python script using the new 'google-genai' library
-             python scripts/research_agent.py
-          fi
-
-      - name: Generate DOCX Report
-        run: |
-          echo "=== GENERATING DOCX ==="
-          REPORT_MD="outputs/research_report.md"
-          TODAY=$(date +"%Y-%m-%d")
-          REPORT_DOCX="outputs/Research_Report_${TODAY}.docx"
-          
-          # Check if report exists and isn't the "NO_SIGNALS" flag
-          if [ -f "$REPORT_MD" ] && ! grep -q "NO_SIGNALS" "$REPORT_MD"; then
-            # Install Pandoc (Fast, standard converter)
-            sudo apt-get update && sudo apt-get install -y pandoc
-            
-            # Convert Markdown to DOCX
-            pandoc "$REPORT_MD" -o "$REPORT_DOCX" --toc --toc-depth=2
-            
-            echo "✓ Generated $REPORT_DOCX"
-          else
-            echo "No research content to convert."
-          fi
-
-      # --- 5. NOTIFICATION ---
-      - name: Send Report via Telegram
+      # --- 4. TELEGRAM ALERT ---
+      - name: Send Telegram Alerts (BUY Signals)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           TODAY=$(date +"%Y-%m-%d")
-          REPORT_DOCX="outputs/Research_Report_${TODAY}.docx"
+          FILE="results_all/ou_signals_all_${TODAY}.csv"
           
-          if [ -f "$REPORT_DOCX" ]; then
-             echo "Sending Document to Telegram..."
-             
-             # Send ONLY the document. No long text message.
-             curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-               -F chat_id="${TELEGRAM_CHAT_ID}" \
-               -F document=@"$REPORT_DOCX" \
-               -F caption="📊 Strategic Research Report (${TODAY})"
-          else
-             echo "No report file to send."
-             
-             # Optional: Send a tiny alert if no signals were found at all
-             # curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-             #   -d chat_id="${TELEGRAM_CHAT_ID}" \
-             #   -d text="No strategic buy signals generated for ${TODAY}."
+          if [ ! -f "$FILE" ]; then
+            echo "No output file found today."
+            exit 0
           fi
+          
+          # Count signals (lines - 1 header)
+          TOTAL_LINES=$(wc -l < "$FILE")
+          TOTAL_SIGNALS=$((TOTAL_LINES - 1))
+          
+          # Extract ONLY "BUY" signals
+          # Format: Symbol, ClosePrice, Theta (Strength)
+          # We use awk to filter for 'BUY', then cut columns 1 (Symbol) and 2 (Close)
+          BUY_LIST=$(awk -F',' '$4 == "BUY" {printf "• %s (%.2f)\n", $1, $2}' "$FILE" | sed 's/\.NS//g')
+          BUY_COUNT=$(echo "$BUY_LIST" | grep -c "•" || true)
+          
+          if [ -z "$BUY_LIST" ] || [ "$BUY_COUNT" -eq 0 ]; then
+             MESSAGE="📉 *No BUY Signals Today (${TODAY})*%0ATotal Scanned: ${TOTAL_SIGNALS}"
+          else
+             # Construct Message with Header + List
+             HEADER="📈 *BUY Signals Detected (${TODAY})*%0A"
+             STATS="Count: ${BUY_COUNT} / ${TOTAL_SIGNALS}%0A%0A"
+             BODY="${BUY_LIST}"
+             
+             MESSAGE="${HEADER}${STATS}${BODY}"
+          fi
+          
+          # Send via Telegram API
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d parse_mode="Markdown" \
+            --data-urlencode "text=${MESSAGE}"
 
-      # --- 6. CLEANUP & COMMIT ---
-      - name: Write run marker
-        run: |
-          echo "Last run: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" > outputs/last_run.txt
-
-      - name: Commit updated output files
+      # --- 5. COMMIT RESULTS ---
+      - name: Commit updated files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          # Commit parquet (data), csv (signals), and docx (report)
-          git add -A data/*.parquet results_all/* outputs/*.docx outputs/*.md outputs/last_run.txt || true
+          # Commit only data and results
+          git add -A data/*.parquet results_all/*.csv results_selected/*.csv || true
           
           if ! git diff --staged --quiet; then
-            git commit -m "Auto update: Signals + Research Report [skip ci]"
+            git commit -m "Auto update: Daily Signals [skip ci]"
             git push
           else
             echo "No changes to commit."
