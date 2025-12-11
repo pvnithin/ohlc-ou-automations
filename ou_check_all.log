@@ -4,7 +4,7 @@ Results will be saved to: results_all/ou_signals_all_2025-12-11.csv
 ======================================================================
 
 Loading OHLC data from daily_ohlc.parquet...
-Loaded 2269972 records for 2136 symbols
+Loaded 2269990 records for 2136 symbols
 
 Scanning 2136 symbols for OU signals...
 Parameters: Theta >= 0.02, Half-Life <= 25
@@ -35,49 +35,69 @@ Processing 2100/2136 symbols...
 Processed 2016 symbols with sufficient data
 
 ======================================================================
-SCAN COMPLETE - 2025-12-11 05:11:26
+SCAN COMPLETE - 2025-12-11 05:58:32
 ======================================================================
 
-Total Signals Found: 17
+Total Signals Found: 18
 
 Signal Breakdown:
-  BUY: 8
-  SELL: 8
+  BUY: 6
+  SELL: 11
   FILTERED_SELL: 1
 
 ======================================================================
 ACTIVE SIGNALS (Valid Regime):
 ======================================================================
 
-3PLAND - BUY
-  Date: 2025-12-11
-  Close: 36.35
-  Theta: 0.1089
-  Half-Life: 6.37
-  Current Xt: -8.2018
-  Previous Xt: -6.1075
-  Xt Change: -2.0943
-  Bands: [-8.1014, -2.3309]
-
 AGRITECH - SELL
   Date: 2025-12-11
-  Close: 131.43
-  Theta: 0.4746
-  Half-Life: 1.46
-  Current Xt: -11.9825
+  Close: 131.05
+  Theta: 0.4778
+  Half-Life: 1.45
+  Current Xt: -12.3605
   Previous Xt: -13.9325
-  Xt Change: 1.9500
-  Bands: [-29.1282, -12.7184]
+  Xt Change: 1.5720
+  Bands: [-29.1040, -12.7800]
 
-V2RETAIL - BUY
+APOLSINHOT - BUY
   Date: 2025-12-11
-  Close: 2171.00
-  Theta: 0.1794
-  Half-Life: 3.86
-  Current Xt: 254.1872
-  Previous Xt: 268.4727
-  Xt Change: -14.2855
-  Bands: [255.2450, 655.7054]
+  Close: 1199.00
+  Theta: 0.2111
+  Half-Life: 3.28
+  Current Xt: -126.9427
+  Previous Xt: -95.6018
+  Xt Change: -31.3409
+  Bands: [-113.7460, -4.4569]
+
+VETO - BUY
+  Date: 2025-12-11
+  Close: 107.91
+  Theta: 0.2603
+  Half-Life: 2.66
+  Current Xt: -6.6395
+  Previous Xt: -6.0507
+  Xt Change: -0.5889
+  Bands: [-6.2486, 6.9160]
+
+SUPERHOUSE - BUY
+  Date: 2025-12-11
+  Close: 146.51
+  Theta: 0.4520
+  Half-Life: 1.53
+  Current Xt: -15.1603
+  Previous Xt: -14.0147
+  Xt Change: -1.1457
+  Bands: [-14.5419, 5.3173]
+
+SHYAMTEL - SELL
+  Date: 2025-12-11
+  Close: 12.94
+  Theta: 0.7174
+  Half-Life: 0.97
+  Current Xt: -0.7189
+  Previous Xt: -0.9529
+  Xt Change: 0.2340
+  Bands: [-1.9094, -0.8327]
 
 RSSOFTWARE - SELL
   Date: 2025-12-11
@@ -91,33 +111,33 @@ RSSOFTWARE - SELL
 
 RELCHEMQ - BUY
   Date: 2025-12-11
-  Close: 139.99
-  Theta: 0.3553
-  Half-Life: 1.95
-  Current Xt: -25.8052
+  Close: 138.40
+  Theta: 0.3366
+  Half-Life: 2.06
+  Current Xt: -27.3873
   Previous Xt: -24.5859
-  Xt Change: -1.2194
-  Bands: [-25.7949, -14.5044]
+  Xt Change: -2.8014
+  Bands: [-26.1497, -14.3683]
 
 RAMASTEEL - SELL
   Date: 2025-12-11
-  Close: 10.73
-  Theta: 0.1260
-  Half-Life: 5.50
-  Current Xt: 0.0886
+  Close: 10.84
+  Theta: 0.1194
+  Half-Life: 5.81
+  Current Xt: 0.1981
   Previous Xt: -0.5313
-  Xt Change: 0.6198
-  Bands: [-1.2612, 0.0610]
+  Xt Change: 0.7293
+  Bands: [-1.2847, 0.1356]
 
 RAJSREESUG - SELL
   Date: 2025-12-11
-  Close: 40.80
-  Theta: 0.3049
-  Half-Life: 2.27
-  Current Xt: -2.0536
+  Close: 40.32
+  Theta: 0.3182
+  Half-Life: 2.18
+  Current Xt: -2.5312
   Previous Xt: -4.4627
-  Xt Change: 2.4092
-  Bands: [-9.5042, -3.6606]
+  Xt Change: 1.9316
+  Bands: [-9.4309, -3.8111]
 
 PAR - SELL
   Date: 2025-12-11
@@ -129,27 +149,7 @@ PAR - SELL
   Xt Change: 2.3259
   Bands: [-19.9783, -6.6440]
 
-PALASHSECU - BUY
-  Date: 2025-12-11
-  Close: 106.82
-  Theta: 0.2375
-  Half-Life: 2.92
-  Current Xt: -14.4775
-  Previous Xt: -11.8693
-  Xt Change: -2.6082
-  Bands: [-14.4400, -4.4699]
-
-MBLINFRA - BUY
-  Date: 2025-12-11
-  Close: 31.60
-  Theta: 0.1196
-  Half-Life: 5.80
-  Current Xt: -10.2367
-  Previous Xt: -9.7996
-  Xt Change: -0.4371
-  Bands: [-9.8422, -1.4767]
-
-... and 6 more signals
+... and 7 more signals
 See full results in ou_signals_all_2025-12-11.csv
 
 ======================================================================
