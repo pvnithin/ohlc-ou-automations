@@ -2,4 +2,4 @@ pandas
 pyarrow
 yfinance
 numpy
-google-generativeai
+google-genai
