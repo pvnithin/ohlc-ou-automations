@@ -4,7 +4,7 @@ Results will be saved to: results_selected/ou_signals_selected_2025-12-11.csv
 ======================================================================
 
 Loading OHLC data from daily_ohlc.parquet...
-Loaded 2269990 records for 2136 symbols
+Loaded 2267879 records for 2136 symbols
 
 Scanning 209 symbols for OU signals...
 Parameters: Theta >= 0.02, Half-Life <= 25
@@ -17,6 +17,40 @@ Processing 200/209 symbols...
 
 Processed 209 symbols with sufficient data
 
-No signals found in any symbols.
+======================================================================
+SCAN COMPLETE - 2025-12-11 06:32:41
+======================================================================
+
+Total Signals Found: 2
+
+Signal Breakdown:
+  BUY: 2
+
+======================================================================
+ACTIVE SIGNALS (Valid Regime):
+======================================================================
+
+KEI - BUY
+  Date: 2025-12-10
+  Close: 3947.90
+  Theta: 0.2285
+  Half-Life: 3.03
+  Current Xt: 251.4817
+  Previous Xt: 379.3032
+  Xt Change: -127.8216
+  Bands: [258.2703, 605.8586]
+
+TATATECH - BUY
+  Date: 2025-12-10
+  Close: 643.30
+  Theta: 0.2154
+  Half-Life: 3.22
+  Current Xt: -48.3267
+  Previous Xt: -39.8589
+  Xt Change: -8.4677
+  Bands: [-47.1006, 2.4866]
+
+======================================================================
+Results saved to: /home/runner/work/ohlc-ou-automations/ohlc-ou-automations/results_selected/ou_signals_selected_2025-12-11.csv
 
 Done!
