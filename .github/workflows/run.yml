@@ -48,11 +48,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # Add all output files
+          
           git add -A data/*.parquet data/*.log results_all/* results_selected/* outputs/last_run.txt || true
-
-          # Commit if there are changes
+          
           if ! git diff --staged --quiet; then
             git commit -m "Auto update from scheduled workflow [skip ci]"
             git push
@@ -61,29 +59,29 @@ jobs:
           fi
 
       - name: Send Telegram Alerts (BUY signals only)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           TODAY=$(date +"%Y-%m-%d")
           FILE="results_all/ou_signals_all_${TODAY}.csv"
-
+          
           if [ ! -f "$FILE" ]; then
             echo "No output file found for today: $FILE"
-            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -d chat_id="${TELEGRAM_CHAT_ID}" \
               -d text="📊 No signals file generated today."
             exit 0
           fi
-
-          # Extract BUY signals only (filter by Signal column = BUY)
-          # CSV format: Symbol,Date,Close,Signal,...
+          
           BUY_SIGNALS=$(awk -F',' '$4 == "BUY" {print $1}' "$FILE" | grep -v "Symbol" | sed 's/\.NS//g' | tr '\n' ' ')
-
+          
           if [ -z "$BUY_SIGNALS" ]; then
-            MESSAGE="📉 No BUY signals today ($(date +"%Y-%m-%d"))"
+            MESSAGE="📉 No BUY signals today (${TODAY})"
           else
-            MESSAGE="📈 BUY Signals Today ($(date +"%Y-%m-%d")):
-$BUY_SIGNALS"
+            MESSAGE="📈 BUY Signals Today (${TODAY}): ${BUY_SIGNALS}"
           fi
-
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="$MESSAGE"
+          
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="${MESSAGE}"
