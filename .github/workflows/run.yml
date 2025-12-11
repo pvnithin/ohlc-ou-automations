@@ -1,5 +1,4 @@
-name: Run OHLC + OU Scans (Mon–Fri 06:00 IST)
-
+name: Run OHLC + OU Scans + Deep Research
 on:
   schedule:
     - cron: "30 0 * * 1-5"   # 06:00 IST -> 00:30 UTC
@@ -8,8 +7,8 @@ on:
 jobs:
   run-scripts:
     runs-on: ubuntu-latest
-
     steps:
+      # --- 1. SETUP ---
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -23,26 +22,21 @@ jobs:
       - name: Install requirements
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          # Explicitly install the new Gemini library here to ensure it exists
+          pip install google-genai pandas pyarrow yfinance
 
       - name: Ensure directories exist
         run: |
           mkdir -p data results_all results_selected outputs
 
+      # --- 2. DATA FETCH & VALIDATION ---
       - name: Check existing data (BEFORE ohlc.py)
         run: |
           echo "=== CHECKING EXISTING DATA ==="
           if [ -f "data/daily_ohlc.parquet" ]; then
             echo "✓ Parquet file exists"
-            python3 -c "
-          import pandas as pd
-          from datetime import datetime
-          df = pd.read_parquet('data/daily_ohlc.parquet')
-          df['Date'] = pd.to_datetime(df['Date'])
-          print(f'Total records: {len(df)}')
-          print(f'Total symbols: {df[\"Symbol\"].nunique()}')
-          print(f'Latest date in file: {df[\"Date\"].max()}')
-          print(f'Today is: {datetime.now().strftime(\"%Y-%m-%d\")}')"
+            python3 -c "import pandas as pd; df = pd.read_parquet('data/daily_ohlc.parquet'); print(f'Total records: {len(df)}')"
           else
             echo "✗ No existing parquet file"
           fi
@@ -59,39 +53,31 @@ jobs:
           python3 -c "
           import pandas as pd
           from datetime import datetime, timedelta
-          df = pd.read_parquet('data/daily_ohlc.parquet')
-          df['Date'] = pd.to_datetime(df['Date'])
-          latest = df['Date'].max()
-          today = datetime.now().date()
-          yesterday = today - timedelta(days=1)
-          
-          print(f'Latest date in parquet: {latest.date()}')
-          print(f'Today: {today}')
-          print(f'Yesterday: {yesterday}')
-          
-          # Check if data is fresh (today or yesterday for market days)
-          if latest.date() >= yesterday:
-              print('✓ Data is FRESH')
-          else:
-              print(f'⚠️ WARNING: Data is STALE (last update: {latest.date()})')
-              print('This will cause incorrect signals!')
-          
-          # Show sample of latest data
-          print('\nLatest 5 records:')
-          print(df.nlargest(5, 'Date')[['Symbol', 'Date', 'Close']])
+          try:
+              df = pd.read_parquet('data/daily_ohlc.parquet')
+              df['Date'] = pd.to_datetime(df['Date'])
+              latest = df['Date'].max().date()
+              today = datetime.now().date()
+              yesterday = today - timedelta(days=1)
+              print(f'Latest date: {latest}')
+              if latest >= yesterday:
+                  print('✓ Data is FRESH')
+              else:
+                  print(f'⚠️ WARNING: Data is STALE (last update: {latest})')
+          except Exception as e:
+              print(f'Error reading parquet: {e}')
           "
 
+      # --- 3. TECHNICAL ANALYSIS ---
       - name: Run oucheck.py (All Stocks)
         run: |
           echo "=== RUNNING OU CHECK (ALL STOCKS) ==="
           python scripts/oucheck.py | tee ou_check_all.log
-          echo "=== OU CHECK ALL COMPLETE ==="
 
       - name: Run oucheck1.py (Selected Stocks)
         run: |
           echo "=== RUNNING OU CHECK (SELECTED STOCKS) ==="
           python scripts/oucheck1.py | tee ou_check_selected.log
-          echo "=== OU CHECK SELECTED COMPLETE ==="
 
       - name: Verify signal outputs
         run: |
@@ -102,17 +88,20 @@ jobs:
             echo "✓ Signal file found"
           else
             echo "✗ Signal file NOT FOUND"
-            exit 0
+            # We don't exit here so that we can still commit logs if needed, 
+            # but the research step will handle the empty case.
           fi
 
+      # --- 4. AI RESEARCH & REPORT GENERATION ---
       - name: Run Gemini Research Agent
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           echo "=== RUNNING GEMINI RESEARCH ==="
           if [ -z "$GEMINI_API_KEY" ]; then
-             echo "Warning: GEMINI_API_KEY not set."
+             echo "Warning: GEMINI_API_KEY not set. Skipping research."
           else
+             # We rely on the python script using the new 'google-genai' library
              python scripts/research_agent.py
           fi
 
@@ -120,7 +109,8 @@ jobs:
         run: |
           echo "=== GENERATING DOCX ==="
           REPORT_MD="outputs/research_report.md"
-          REPORT_DOCX="outputs/Research_Report_$(date +'%Y-%m-%d').docx"
+          TODAY=$(date +"%Y-%m-%d")
+          REPORT_DOCX="outputs/Research_Report_${TODAY}.docx"
           
           # Check if report exists and isn't the "NO_SIGNALS" flag
           if [ -f "$REPORT_MD" ] && ! grep -q "NO_SIGNALS" "$REPORT_MD"; then
@@ -135,6 +125,7 @@ jobs:
             echo "No research content to convert."
           fi
 
+      # --- 5. NOTIFICATION ---
       - name: Send Report via Telegram
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -155,19 +146,23 @@ jobs:
              echo "No report file to send."
              
              # Optional: Send a tiny alert if no signals were found at all
-             # Uncomment below if you want to know when nothing happened
              # curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
              #   -d chat_id="${TELEGRAM_CHAT_ID}" \
              #   -d text="No strategic buy signals generated for ${TODAY}."
           fi
+
+      # --- 6. CLEANUP & COMMIT ---
+      - name: Write run marker
+        run: |
+          echo "Last run: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" > outputs/last_run.txt
 
       - name: Commit updated output files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          # Commit the parquet, signals, AND the new DOCX report
-          git add -A data/*.parquet results_all/* outputs/*.docx || true
+          # Commit parquet (data), csv (signals), and docx (report)
+          git add -A data/*.parquet results_all/* outputs/*.docx outputs/*.md outputs/last_run.txt || true
           
           if ! git diff --staged --quiet; then
             git commit -m "Auto update: Signals + Research Report [skip ci]"
