@@ -1,0 +1,160 @@
+OU Process Signal Scanner - ALL STOCKS
+Scan Date: 2025-12-11
+Results will be saved to: results_all/ou_signals_all_2025-12-11.csv
+======================================================================
+
+Loading OHLC data from daily_ohlc.parquet...
+Loaded 2269972 records for 2136 symbols
+
+Scanning 2136 symbols for OU signals...
+Parameters: Theta >= 0.02, Half-Life <= 25
+Direction Check: Enabled (Xt must move through band, not band through Xt)
+======================================================================
+Processing 100/2136 symbols...
+Processing 200/2136 symbols...
+Processing 300/2136 symbols...
+Processing 400/2136 symbols...
+Processing 500/2136 symbols...
+Processing 600/2136 symbols...
+Processing 700/2136 symbols...
+Processing 800/2136 symbols...
+Processing 900/2136 symbols...
+Processing 1000/2136 symbols...
+Processing 1100/2136 symbols...
+Processing 1200/2136 symbols...
+Processing 1300/2136 symbols...
+Processing 1400/2136 symbols...
+Processing 1500/2136 symbols...
+Processing 1600/2136 symbols...
+Processing 1700/2136 symbols...
+Processing 1800/2136 symbols...
+Processing 1900/2136 symbols...
+Processing 2000/2136 symbols...
+Processing 2100/2136 symbols...
+
+Processed 2016 symbols with sufficient data
+
+======================================================================
+SCAN COMPLETE - 2025-12-11 05:11:26
+======================================================================
+
+Total Signals Found: 17
+
+Signal Breakdown:
+  BUY: 8
+  SELL: 8
+  FILTERED_SELL: 1
+
+======================================================================
+ACTIVE SIGNALS (Valid Regime):
+======================================================================
+
+3PLAND - BUY
+  Date: 2025-12-11
+  Close: 36.35
+  Theta: 0.1089
+  Half-Life: 6.37
+  Current Xt: -8.2018
+  Previous Xt: -6.1075
+  Xt Change: -2.0943
+  Bands: [-8.1014, -2.3309]
+
+AGRITECH - SELL
+  Date: 2025-12-11
+  Close: 131.43
+  Theta: 0.4746
+  Half-Life: 1.46
+  Current Xt: -11.9825
+  Previous Xt: -13.9325
+  Xt Change: 1.9500
+  Bands: [-29.1282, -12.7184]
+
+V2RETAIL - BUY
+  Date: 2025-12-11
+  Close: 2171.00
+  Theta: 0.1794
+  Half-Life: 3.86
+  Current Xt: 254.1872
+  Previous Xt: 268.4727
+  Xt Change: -14.2855
+  Bands: [255.2450, 655.7054]
+
+RSSOFTWARE - SELL
+  Date: 2025-12-11
+  Close: 59.92
+  Theta: 0.1304
+  Half-Life: 5.32
+  Current Xt: -7.7198
+  Previous Xt: -13.3012
+  Xt Change: 5.5814
+  Bands: [-25.2628, -7.7395]
+
+RELCHEMQ - BUY
+  Date: 2025-12-11
+  Close: 139.99
+  Theta: 0.3553
+  Half-Life: 1.95
+  Current Xt: -25.8052
+  Previous Xt: -24.5859
+  Xt Change: -1.2194
+  Bands: [-25.7949, -14.5044]
+
+RAMASTEEL - SELL
+  Date: 2025-12-11
+  Close: 10.73
+  Theta: 0.1260
+  Half-Life: 5.50
+  Current Xt: 0.0886
+  Previous Xt: -0.5313
+  Xt Change: 0.6198
+  Bands: [-1.2612, 0.0610]
+
+RAJSREESUG - SELL
+  Date: 2025-12-11
+  Close: 40.80
+  Theta: 0.3049
+  Half-Life: 2.27
+  Current Xt: -2.0536
+  Previous Xt: -4.4627
+  Xt Change: 2.4092
+  Bands: [-9.5042, -3.6606]
+
+PAR - SELL
+  Date: 2025-12-11
+  Close: 94.70
+  Theta: 0.2563
+  Half-Life: 2.70
+  Current Xt: -5.8736
+  Previous Xt: -8.1994
+  Xt Change: 2.3259
+  Bands: [-19.9783, -6.6440]
+
+PALASHSECU - BUY
+  Date: 2025-12-11
+  Close: 106.82
+  Theta: 0.2375
+  Half-Life: 2.92
+  Current Xt: -14.4775
+  Previous Xt: -11.8693
+  Xt Change: -2.6082
+  Bands: [-14.4400, -4.4699]
+
+MBLINFRA - BUY
+  Date: 2025-12-11
+  Close: 31.60
+  Theta: 0.1196
+  Half-Life: 5.80
+  Current Xt: -10.2367
+  Previous Xt: -9.7996
+  Xt Change: -0.4371
+  Bands: [-9.8422, -1.4767]
+
+... and 6 more signals
+See full results in ou_signals_all_2025-12-11.csv
+
+======================================================================
+Results saved to: /home/runner/work/ohlc-ou-automations/ohlc-ou-automations/results_all/ou_signals_all_2025-12-11.csv
+
+120 symbols had insufficient data (need 261+ days)
+
+Done!

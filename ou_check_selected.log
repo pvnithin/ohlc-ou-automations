@@ -1,0 +1,22 @@
+OU Process Signal Scanner - SELECTED STOCKS
+Scan Date: 2025-12-11
+Results will be saved to: results_selected/ou_signals_selected_2025-12-11.csv
+======================================================================
+
+Loading OHLC data from daily_ohlc.parquet...
+Loaded 2269972 records for 2136 symbols
+
+Scanning 209 symbols for OU signals...
+Parameters: Theta >= 0.02, Half-Life <= 25
+Direction Check: Enabled (Xt must move through band, not band through Xt)
+======================================================================
+Processing 50/209 symbols...
+Processing 100/209 symbols...
+Processing 150/209 symbols...
+Processing 200/209 symbols...
+
+Processed 209 symbols with sufficient data
+
+No signals found in any symbols.
+
+Done!
