@@ -24,39 +24,39 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          # Install dependencies for OHLC, Analysis and Scraping
+          # Install dependencies for Analysis and Scraping
           pip install pandas pyarrow yfinance requests beautifulsoup4 openpyxl xlsxwriter lxml
 
       - name: Ensure directories exist
         run: |
           mkdir -p data results_all results_selected outputs
 
-      # --- 2. DATA FETCH ---
+      # --- 2. DATA FETCH (ENABLED FOR PRODUCTION) ---
       - name: Run ohlc.py (Fetch Data)
         run: python scripts/ohlc.py
 
       # --- 3. ANALYSIS SCRIPTS ---
       - name: Run oucheck.py (Generate ALL Signals)
+        # Uses the fresh data from ohlc.py
         run: python scripts/oucheck.py
 
       - name: Run oucheck1.py (Generate SELECTED Signals)
-        # We run this for records, but do NOT alert on it
+        # Runs for records
         run: python scripts/oucheck1.py
 
       # --- 4. SCRAPING ---
       - name: Run Scraper (Process oucheck.py results)
-        # This script looks in results_all and scrapes data for BUY signals
         run: python scripts/scraper.py
 
-      # --- 5. TELEGRAM ALERTS (Focused on oucheck.py) ---
+      # --- 5. TELEGRAM ALERTS ---
       - name: Send Telegram Alerts & Files
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # 1. Identify Files in results_all (Ignoring results_selected)
-          CSV_FILE=$(ls results_all/ou_signals_all_*.csv 2>/dev/null | head -n 1)
-          EXCEL_FILE=$(ls results_all/Screener_Analysis_All_*.xlsx 2>/dev/null | head -n 1)
+          # 1. Identify Files in results_all (Sort by Time -t)
+          CSV_FILE=$(ls -t results_all/ou_signals_all_*.csv 2>/dev/null | head -n 1)
+          EXCEL_FILE=$(ls -t results_all/Screener_Analysis_All_*.xlsx 2>/dev/null | head -n 1)
           
           if [ -z "$CSV_FILE" ]; then
             echo "No CSV file found in results_all."
@@ -81,18 +81,16 @@ jobs:
             -d parse_mode="Markdown" \
             --data-urlencode "text=${MESSAGE}"
             
-          # 4. Send The CSV File (From oucheck.py)
+          # 4. Send The CSV File
           if [ ! -z "$CSV_FILE" ]; then
-             echo "Sending CSV: $CSV_FILE"
              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
               -F chat_id="${TELEGRAM_CHAT_ID}" \
               -F document=@"$CSV_FILE" \
               -F caption="📄 Raw Signal Data (All)"
           fi
 
-          # 5. Send The Excel File (From scraper.py)
+          # 5. Send The Excel File
           if [ ! -z "$EXCEL_FILE" ]; then
-            echo "Sending Excel: $EXCEL_FILE"
             curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
               -F chat_id="${TELEGRAM_CHAT_ID}" \
               -F document=@"$EXCEL_FILE" \
@@ -104,9 +102,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
-          # Commit results from ALL folders (data, all, selected)
           git add -A data/*.parquet results_all/*.csv results_all/*.xlsx results_selected/*.csv
-          
-          git commit -m "Run OHLC, Analysis & Scraping [skip ci]" || echo "No changes to commit"
+          git commit -m "Run Daily OHLC & Analysis [skip ci]" || echo "No changes to commit"
           git push
