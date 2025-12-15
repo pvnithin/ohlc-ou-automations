@@ -1,7 +1,9 @@
 name: TEST RUN - Scraper & Alerts (Skip OHLC)
 
 on:
-  workflow_dispatch: # Allows you to manually trigger this from the 'Actions' tab
+  workflow_dispatch: # Allows manual trigger
+  # schedule:        # Uncomment this later for daily run
+  #   - cron: "30 0 * * 1-5"
 
 jobs:
   run-scripts:
@@ -30,13 +32,13 @@ jobs:
           mkdir -p data results_all results_selected outputs
 
       # --- 2. DATA FETCH (SKIPPED FOR TESTING) ---
-      # We comment this out so it uses the 'results_all' data you uploaded
+      # To run normally, remove the hashtags (#) below
       # - name: Run ohlc.py (Fetch Data)
       #   run: python scripts/ohlc.py
 
       # --- 3. ANALYSIS SCRIPTS ---
       - name: Run oucheck.py (Generate ALL Signals)
-        # This re-generates the CSV from your parquet file to ensure freshness
+        # This uses your existing parquet file to generate a FRESH CSV
         run: python scripts/oucheck.py
 
       - name: Run oucheck1.py (Generate SELECTED Signals)
@@ -45,29 +47,31 @@ jobs:
 
       # --- 4. SCRAPING ---
       - name: Run Scraper (Process oucheck.py results)
-        # This reads the CSV from results_all and creates the Excel file
+        # Reads the fresh CSV from results_all and creates the Excel file
         run: python scripts/scraper.py
 
-      # --- 5. TELEGRAM ALERTS (Focused on oucheck.py) ---
+      # --- 5. TELEGRAM ALERTS (FIXED: SORTS BY NEWEST) ---
       - name: Send Telegram Alerts & Files
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # 1. Identify Files in results_all (output of oucheck.py and scraper.py)
-          # We search for the latest files created in this run
-          CSV_FILE=$(ls results_all/ou_signals_all_*.csv 2>/dev/null | head -n 1)
-          EXCEL_FILE=$(ls results_all/Screener_Analysis_All_*.xlsx 2>/dev/null | head -n 1)
+          # 1. Identify Files in results_all 
+          # FIX: Added '-t' to sort by Time (Newest First)
+          CSV_FILE=$(ls -t results_all/ou_signals_all_*.csv 2>/dev/null | head -n 1)
+          EXCEL_FILE=$(ls -t results_all/Screener_Analysis_All_*.xlsx 2>/dev/null | head -n 1)
           
           if [ -z "$CSV_FILE" ]; then
             echo "No CSV file found in results_all. Check if oucheck.py ran correctly."
             exit 0
           fi
+          
+          echo "Found CSV: $CSV_FILE"
+          echo "Found Excel: $EXCEL_FILE"
 
           TODAY=$(date +'%Y-%m-%d')
           
           # 2. Parse CSV for BUY Signal Text
-          # Extracts rows where column 4 is 'BUY'
           BUY_LIST=$(awk -F',' '$4 == "BUY" {printf "• %s (%.2f)\n", $1, $3}' "$CSV_FILE" | sed 's/\.NS//g')
           BUY_COUNT=$(echo "$BUY_LIST" | grep -c "•" || true)
           
