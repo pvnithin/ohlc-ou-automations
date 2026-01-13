@@ -8,7 +8,7 @@ from datetime import datetime
 script_dir = os.path.dirname(os.path.abspath(__file__))
 base_folder = os.path.dirname(script_dir)  # Parent directory (repo root)
 data_folder = os.path.join(base_folder, "data")
-results_folder = os.path.join(base_folder, "results_drift_dominance")
+results_folder = os.path.join(base_folder, "results_all")
 
 input_parquet_name = "daily_ohlc.parquet"
 
@@ -17,7 +17,6 @@ reg_window = 60  # Estimation Lookback Window
 ma_length = 200  # Long-term Mean Length
 min_theta = 0.02  # Min Theta for Signal
 max_half_life = 25  # Max Half-Life for Signal
-z0 = 1.28  # Drift dominance threshold (80% confidence)
 
 # --- End Configuration ---
 
@@ -28,7 +27,7 @@ os.makedirs(results_folder, exist_ok=True)
 
 # Generate filename with current date
 current_date = datetime.now().strftime('%Y-%m-%d')
-output_filename = f"ou_signals_drift_{current_date}.csv"
+output_filename = f"ou_signals_all_{current_date}.csv"
 output_path = os.path.join(results_folder, output_filename)
 
 def calculate_ou_parameters_at_bar(prices, reg_window, ma_length, bar_idx):
@@ -114,9 +113,6 @@ def calculate_ou_parameters_at_bar(prices, reg_window, ma_length, bar_idx):
     # Get Xt at this bar
     Xt_value = Xt.iloc[-1]
     
-    # Calculate drift z-score: (theta * |Xt - mu|) / sigma
-    drift_z = (theta * np.abs(Xt_value - mu_ou)) / sigma_ou if sigma_ou > 0 else 0.0
-    
     return {
         'theta': theta,
         'mu_ou': mu_ou,
@@ -124,18 +120,14 @@ def calculate_ou_parameters_at_bar(prices, reg_window, ma_length, bar_idx):
         'half_life': half_life,
         'Xt': Xt_value,
         'band_upper': band_upper,
-        'band_lower': band_lower,
-        'drift_z': drift_z
+        'band_lower': band_lower
     }
 
 def detect_signals(symbol_data):
     """
-    Detect buy/sell signals using drift dominance logic:
-    - Buy when: Xt < lower band AND regime valid AND drift dominant
-    - Sell when: Xt > upper band AND regime valid AND drift dominant
-    
-    This captures the moment when mean-reversion force overcomes noise,
-    signaling an imminent reversal BEFORE it happens.
+    Detect buy/sell signals by checking the LAST bar for crossovers
+    Uses the bands as they existed on each bar (not recalculated with future data)
+    INCLUDES direction check: Xt must be moving in the right direction for a true cross
     """
     results = []
     
@@ -147,45 +139,45 @@ def detect_signals(symbol_data):
     
     # Get the last bar index
     last_bar_idx = len(symbol_data) - 1
+    prev_bar_idx = last_bar_idx - 1
     
-    # Calculate OU parameters for the last bar
+    # Calculate OU parameters AS THEY WERE on each bar
     current_params = calculate_ou_parameters_at_bar(
         symbol_data['Close'], reg_window, ma_length, last_bar_idx
     )
+    prev_params = calculate_ou_parameters_at_bar(
+        symbol_data['Close'], reg_window, ma_length, prev_bar_idx
+    )
     
-    if current_params is None:
+    if current_params is None or prev_params is None:
         return results
     
-    # Extract parameters
+    # Use current bar's parameters for regime check and signal data
     theta = current_params['theta']
     half_life = current_params['half_life']
+    regime_valid = (theta >= min_theta) and (half_life <= max_half_life)
+    
+    # Get Xt and bands from EACH bar (as they existed at that time)
+    prev_Xt = prev_params['Xt']
+    prev_band_lower = prev_params['band_lower']
+    prev_band_upper = prev_params['band_upper']
+    
     current_Xt = current_params['Xt']
     current_band_lower = current_params['band_lower']
     current_band_upper = current_params['band_upper']
-    drift_z = current_params['drift_z']
-    mu_ou = current_params['mu_ou']
-    sigma_ou = current_params['sigma_ou']
     
-    # Three-factor signal logic:
-    # 1. Regime Valid: theta >= min_theta AND half_life <= max_half_life
-    # 2. At Extreme: Xt outside 2σ bands
-    # 3. Drift Dominant: drift z-score > z0 (mean-reversion force > noise)
-    regime_valid = (theta >= min_theta) and (half_life <= max_half_life)
-    drift_dominant = drift_z > z0
+    # Detect crossovers with DIRECTION CHECK
+    raw_buy = (prev_Xt >= prev_band_lower) and (current_Xt < current_band_lower) and (current_Xt < prev_Xt)
+    raw_sell = (prev_Xt <= prev_band_upper) and (current_Xt > current_band_upper) and (current_Xt > prev_Xt)
     
-    # Extremity checks
-    at_lower_extreme = current_Xt < current_band_lower
-    at_upper_extreme = current_Xt > current_band_upper
+    # Apply regime filter
+    buy_signal = raw_buy and regime_valid
+    sell_signal = raw_sell and regime_valid
     
-    # Final signals
-    buy_signal = at_lower_extreme and regime_valid and drift_dominant
-    sell_signal = at_upper_extreme and regime_valid and drift_dominant
-    
-    # Signal date is the current bar date
+    # Signal date is the current bar date (where the cross completed)
     signal_date = symbol_data['Date'].iloc[last_bar_idx]
     latest_close = symbol_data['Close'].iloc[last_bar_idx]
     
-    # Record signal or filtered signal
     if buy_signal or sell_signal:
         signal_type = 'BUY' if buy_signal else 'SELL'
         results.append({
@@ -193,43 +185,25 @@ def detect_signals(symbol_data):
             'Theta': theta,
             'Half_Life': half_life,
             'Deviation_Xt': current_Xt,
-            'Mu_OU': mu_ou,
-            'Sigma_OU': sigma_ou,
+            'Prev_Xt': prev_Xt,
             'Upper_Band': current_band_upper,
             'Lower_Band': current_band_lower,
-            'Drift_Z': drift_z,
             'Regime_Valid': regime_valid,
-            'Drift_Dominant': drift_dominant,
             'Date': signal_date,
             'Close': latest_close
         })
-    elif at_lower_extreme or at_upper_extreme:
-        # Filtered signal - at extreme but missing other conditions
-        signal_type = 'FILTERED_BUY' if at_lower_extreme else 'FILTERED_SELL'
-        filter_reasons = []
-        
-        if not regime_valid:
-            if theta < min_theta:
-                filter_reasons.append(f"Theta={theta:.4f}<{min_theta}")
-            if half_life > max_half_life:
-                filter_reasons.append(f"HalfLife={half_life:.2f}>{max_half_life}")
-        
-        if not drift_dominant:
-            filter_reasons.append(f"DriftZ={drift_z:.2f}<={z0}")
-        
+    elif raw_buy or raw_sell:
+        # Filtered signal (regime not valid)
+        signal_type = 'FILTERED_BUY' if raw_buy else 'FILTERED_SELL'
         results.append({
             'Signal': signal_type,
             'Theta': theta,
             'Half_Life': half_life,
             'Deviation_Xt': current_Xt,
-            'Mu_OU': mu_ou,
-            'Sigma_OU': sigma_ou,
+            'Prev_Xt': prev_Xt,
             'Upper_Band': current_band_upper,
             'Lower_Band': current_band_lower,
-            'Drift_Z': drift_z,
             'Regime_Valid': regime_valid,
-            'Drift_Dominant': drift_dominant,
-            'Filter_Reason': '; '.join(filter_reasons),
             'Date': signal_date,
             'Close': latest_close
         })
@@ -237,9 +211,9 @@ def detect_signals(symbol_data):
     return results
 
 # --- Main Execution ---
-print(f"OU Process Signal Scanner - DRIFT DOMINANCE LOGIC")
+print(f"OU Process Signal Scanner - ALL STOCKS")
 print(f"Scan Date: {current_date}")
-print(f"Results will be saved to: results_drift_dominance/{output_filename}")
+print(f"Results will be saved to: results_all/{output_filename}")
 print("=" * 70)
 print(f"\nLoading OHLC data from {input_parquet_name}...")
 
@@ -259,11 +233,8 @@ df['Date'] = pd.to_datetime(df['Date'])
 # Get list of all symbols
 symbols = df['Symbol'].unique()
 print(f"\nScanning {len(symbols)} symbols for OU signals...")
-print(f"\nSignal Logic (3 factors required):")
-print(f"  1. At Extreme: Price outside 2σ bands")
-print(f"  2. Regime Valid: Theta >= {min_theta}, Half-Life <= {max_half_life}")
-print(f"  3. Drift Dominant: (θ×|Xt-μ|)/σ > {z0}")
-print(f"\nThis captures early reversal signals BEFORE price turns back.")
+print(f"Parameters: Theta >= {min_theta}, Half-Life <= {max_half_life}")
+print(f"Direction Check: Enabled (Xt must move through band, not band through Xt)")
 print("=" * 70)
 
 all_signals = []
@@ -285,7 +256,7 @@ for i, symbol in enumerate(symbols, 1):
     
     if signals:
         for signal in signals:
-            signal_dict = {
+            all_signals.append({
                 'Symbol': symbol,
                 'Date': signal['Date'],
                 'Close': signal['Close'],
@@ -293,17 +264,11 @@ for i, symbol in enumerate(symbols, 1):
                 'Theta': signal['Theta'],
                 'Half_Life': signal['Half_Life'],
                 'Deviation_Xt': signal['Deviation_Xt'],
-                'Mu_OU': signal['Mu_OU'],
-                'Sigma_OU': signal['Sigma_OU'],
+                'Prev_Xt': signal['Prev_Xt'],
                 'Upper_Band': signal['Upper_Band'],
                 'Lower_Band': signal['Lower_Band'],
-                'Drift_Z': signal['Drift_Z'],
-                'Regime_Valid': signal['Regime_Valid'],
-                'Drift_Dominant': signal['Drift_Dominant']
-            }
-            if 'Filter_Reason' in signal:
-                signal_dict['Filter_Reason'] = signal['Filter_Reason']
-            all_signals.append(signal_dict)
+                'Regime_Valid': signal['Regime_Valid']
+            })
 
 print(f"\nProcessed {symbols_processed} symbols with sufficient data")
 
@@ -331,59 +296,30 @@ if all_signals:
     active_signals = results_df[results_df['Signal'].isin(['BUY', 'SELL'])]
     if len(active_signals) > 0:
         print(f"\n{'=' * 70}")
-        print("ACTIVE SIGNALS (All 3 Factors Met):")
+        print("ACTIVE SIGNALS (Valid Regime):")
         print(f"{'=' * 70}")
         display_count = min(10, len(active_signals))
         for _, row in active_signals.head(display_count).iterrows():
             display_symbol = row['Symbol'].replace('.NS', '')
             print(f"\n{display_symbol} - {row['Signal']}")
             print(f"  Date: {row['Date'].strftime('%Y-%m-%d')}")
-            print(f"  Close: ₹{row['Close']:.2f}")
-            print(f"  ✓ Theta: {row['Theta']:.4f} (min: {min_theta})")
-            print(f"  ✓ Half-Life: {row['Half_Life']:.2f} days (max: {max_half_life})")
-            print(f"  ✓ Drift Z: {row['Drift_Z']:.2f} (threshold: {z0})")
+            print(f"  Close: {row['Close']:.2f}")
+            print(f"  Theta: {row['Theta']:.4f}")
+            print(f"  Half-Life: {row['Half_Life']:.2f}")
             print(f"  Current Xt: {row['Deviation_Xt']:.4f}")
-            print(f"  Distance from Mean: {abs(row['Deviation_Xt'] - row['Mu_OU']):.4f}")
+            print(f"  Previous Xt: {row['Prev_Xt']:.4f}")
+            print(f"  Xt Change: {row['Deviation_Xt'] - row['Prev_Xt']:.4f}")
             print(f"  Bands: [{row['Lower_Band']:.4f}, {row['Upper_Band']:.4f}]")
         
         if len(active_signals) > display_count:
             print(f"\n... and {len(active_signals) - display_count} more signals")
-    else:
-        print("\n" + "=" * 70)
-        print("NO ACTIVE SIGNALS FOUND")
-        print("=" * 70)
-        
-        # Analyze why signals are filtered
-        filtered = results_df[results_df['Signal'].str.startswith('FILTERED_')]
-        if len(filtered) > 0:
-            print(f"\nFound {len(filtered)} filtered signals (at extremes but missing conditions).")
-            if 'Filter_Reason' in filtered.columns:
-                print("\nMost common filter reasons:")
-                reasons = filtered['Filter_Reason'].value_counts()
-                for reason, count in reasons.head(5).items():
-                    print(f"  [{count}×] {reason}")
-                
-                # Analyze drift z-scores of filtered signals
-                avg_drift_z = filtered['Drift_Z'].mean()
-                print(f"\nFiltered signals average Drift Z-Score: {avg_drift_z:.2f}")
-                print(f"Required threshold: {z0}")
-                
-                if avg_drift_z < z0:
-                    print("→ Most signals filtered due to insufficient drift dominance")
-                    print("  (mean-reversion force not strong enough vs noise)")
+            print(f"See full results in {output_filename}")
     
     print(f"\n{'=' * 70}")
     print(f"Results saved to: {output_path}")
-    print(f"{'=' * 70}")
     
 else:
-    print("\n" + "=" * 70)
-    print("NO SIGNALS FOUND")
-    print("=" * 70)
-    print("\nPossible reasons:")
-    print("  • No stocks currently at extremes (outside 2σ bands)")
-    print("  • Drift dominance threshold too strict (z-score > 1.28)")
-    print("  • Regime filters excluding all candidates")
+    print("\nNo signals found in any symbols.")
 
 if symbols_with_insufficient_data:
     print(f"\n{len(symbols_with_insufficient_data)} symbols had insufficient data (need 261+ days)")
