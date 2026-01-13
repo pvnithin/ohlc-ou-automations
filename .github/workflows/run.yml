@@ -1,10 +1,8 @@
-name: Run OHLC + OU Scans (Mon–Fri 06:00 IST)
-
+name: Run OHLC + OU Scans with Drift Dominance (Mon–Fri 06:00 IST)
 on:
   schedule:
     - cron: "30 0 * * 1-5"   # 06:00 IST -> 00:30 UTC
   workflow_dispatch:
-
 jobs:
   run-scripts:
     runs-on: ubuntu-latest
@@ -14,94 +12,135 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: true
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
-
       - name: Install requirements
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           # Install dependencies for Analysis and Scraping
           pip install pandas pyarrow yfinance requests beautifulsoup4 openpyxl xlsxwriter lxml
-
       - name: Ensure directories exist
         run: |
-          mkdir -p data results_all results_selected outputs
-
+          mkdir -p data results_all results_drift_dominance results_selected outputs
       # --- 2. DATA FETCH (ENABLED FOR PRODUCTION) ---
       - name: Run ohlc.py (Fetch Data)
         run: python scripts/ohlc.py
-
       # --- 3. ANALYSIS SCRIPTS ---
-      - name: Run oucheck.py (Generate ALL Signals)
-        # Uses the fresh data from ohlc.py
+      - name: Run oucheck.py (Generate ALL Signals - Crossover)
+        # Original crossover logic for comparison
         run: python scripts/oucheck.py
-
+      - name: Run oucheck_drift.py (Generate Drift Dominance Signals)
+        # New drift dominance logic
+        run: python scripts/oucheck_drift.py
       - name: Run oucheck1.py (Generate SELECTED Signals)
         # Runs for records
         run: python scripts/oucheck1.py
-
       # --- 4. SCRAPING ---
-      - name: Run Scraper (Process oucheck.py results)
+      - name: Run Scraper for Crossover Signals
         run: python scripts/scraper.py
-
+      - name: Run Scraper for Drift Dominance Signals
+        run: python scripts/scraper_drift.py
       # --- 5. TELEGRAM ALERTS ---
-      - name: Send Telegram Alerts & Files
+      - name: Send Telegram Alerts & Files (Crossover Signals)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # 1. Identify Files in results_all (Sort by Time -t)
+          # 1. Identify Files in results_all
           CSV_FILE=$(ls -t results_all/ou_signals_all_*.csv 2>/dev/null | head -n 1)
           EXCEL_FILE=$(ls -t results_all/Screener_Analysis_All_*.xlsx 2>/dev/null | head -n 1)
           
           if [ -z "$CSV_FILE" ]; then
             echo "No CSV file found in results_all."
-            exit 0
-          fi
-
-          TODAY=$(date +'%Y-%m-%d')
-          
-          # 2. Parse CSV for BUY Signal Text
-          BUY_LIST=$(awk -F',' '$4 == "BUY" {printf "• %s (%.2f)\n", $1, $3}' "$CSV_FILE" | sed 's/\.NS//g')
-          BUY_COUNT=$(echo "$BUY_LIST" | grep -c "•" || true)
-          
-          if [ -z "$BUY_LIST" ] || [ "$BUY_COUNT" -eq 0 ]; then
-             MESSAGE=$(printf "📉 *No BUY Signals Today (%s)*" "$TODAY")
           else
-             MESSAGE=$(printf "📈 *BUY Signals Detected (%s)*\n\n%s" "$TODAY" "$BUY_LIST")
-          fi
-          
-          # 3. Send Text Message
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d parse_mode="Markdown" \
-            --data-urlencode "text=${MESSAGE}"
+            TODAY=$(date +'%Y-%m-%d')
             
-          # 4. Send The CSV File
-          if [ ! -z "$CSV_FILE" ]; then
-             curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-              -F chat_id="${TELEGRAM_CHAT_ID}" \
-              -F document=@"$CSV_FILE" \
-              -F caption="📄 Raw Signal Data (All)"
+            # Parse CSV for BUY Signal Text
+            BUY_LIST=$(awk -F',' '$4 == "BUY" {printf "• %s (%.2f)\n", $1, $3}' "$CSV_FILE" | sed 's/\.NS//g')
+            BUY_COUNT=$(echo "$BUY_LIST" | grep -c "•" || true)
+            
+            if [ -z "$BUY_LIST" ] || [ "$BUY_COUNT" -eq 0 ]; then
+               MESSAGE=$(printf "📉 *Crossover: No BUY Signals Today (%s)*" "$TODAY")
+            else
+               MESSAGE=$(printf "📈 *Crossover BUY Signals (%s)*\n\n%s" "$TODAY" "$BUY_LIST")
+            fi
+            
+            # Send Text Message
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -d chat_id="${TELEGRAM_CHAT_ID}" \
+              -d parse_mode="Markdown" \
+              --data-urlencode "text=${MESSAGE}"
+              
+            # Send CSV File
+            if [ ! -z "$CSV_FILE" ]; then
+               curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+                -F chat_id="${TELEGRAM_CHAT_ID}" \
+                -F document=@"$CSV_FILE" \
+                -F caption="📄 Crossover Signal Data"
+            fi
+            
+            # Send Excel File
+            if [ ! -z "$EXCEL_FILE" ]; then
+              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+                -F chat_id="${TELEGRAM_CHAT_ID}" \
+                -F document=@"$EXCEL_FILE" \
+                -F caption="📊 Crossover Screener Data"
+            fi
           fi
-
-          # 5. Send The Excel File
-          if [ ! -z "$EXCEL_FILE" ]; then
-            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-              -F chat_id="${TELEGRAM_CHAT_ID}" \
-              -F document=@"$EXCEL_FILE" \
-              -F caption="📊 Scraped Screener Data (Excel)"
+      - name: Send Telegram Alerts & Files (Drift Dominance Signals)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # 1. Identify Files in results_drift_dominance
+          CSV_FILE=$(ls -t results_drift_dominance/ou_signals_drift_*.csv 2>/dev/null | head -n 1)
+          EXCEL_FILE=$(ls -t results_drift_dominance/Screener_Analysis_Drift_*.xlsx 2>/dev/null | head -n 1)
+          
+          if [ -z "$CSV_FILE" ]; then
+            echo "No CSV file found in results_drift_dominance."
+          else
+            TODAY=$(date +'%Y-%m-%d')
+            
+            # Parse CSV for BUY Signal Text
+            BUY_LIST=$(awk -F',' '$4 == "BUY" {printf "• %s (₹%.2f, Z=%.2f)\n", $1, $3, $12}' "$CSV_FILE" | sed 's/\.NS//g')
+            BUY_COUNT=$(echo "$BUY_LIST" | grep -c "•" || true)
+            
+            if [ -z "$BUY_LIST" ] || [ "$BUY_COUNT" -eq 0 ]; then
+               MESSAGE=$(printf "🎯 *Drift Dominance: No BUY Signals Today (%s)*\n\n_All 3 factors required: Extreme + Regime + Drift>1.28_" "$TODAY")
+            else
+               MESSAGE=$(printf "🎯 *Drift Dominance BUY Signals (%s)*\n\n%s\n\n_✓ At Extreme ✓ Regime Valid ✓ Drift Dominant_" "$TODAY" "$BUY_LIST")
+            fi
+            
+            # Send Text Message
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -d chat_id="${TELEGRAM_CHAT_ID}" \
+              -d parse_mode="Markdown" \
+              --data-urlencode "text=${MESSAGE}"
+              
+            # Send CSV File
+            if [ ! -z "$CSV_FILE" ]; then
+               curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+                -F chat_id="${TELEGRAM_CHAT_ID}" \
+                -F document=@"$CSV_FILE" \
+                -F caption="📄 Drift Dominance Signal Data (θ≥0.02, HL≤25, Z>1.28)"
+            fi
+            
+            # Send Excel File
+            if [ ! -z "$EXCEL_FILE" ]; then
+              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+                -F chat_id="${TELEGRAM_CHAT_ID}" \
+                -F document=@"$EXCEL_FILE" \
+                -F caption="📊 Drift Dominance Screener Data (High-Conviction Signals)"
+            fi
           fi
-
       # --- 6. COMMIT RESULTS ---
       - name: Commit updated files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A data/*.parquet results_all/*.csv results_all/*.xlsx results_selected/*.csv
-          git commit -m "Run Daily OHLC & Analysis [skip ci]" || echo "No changes to commit"
+          git add -A data/*.parquet results_all/*.csv results_all/*.xlsx results_drift_dominance/*.csv results_drift_dominance/*.xlsx results_selected/*.csv
+          git commit -m "Run Daily OHLC & Analysis (Crossover + Drift) [skip ci]" || echo "No changes to commit"
           git push
